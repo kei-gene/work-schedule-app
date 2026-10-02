@@ -11,9 +11,18 @@
   <h1>シフト・作業スケジュール</h1>
   <nav class="tabs">
     <button class="tab active" data-tab="home">ホーム</button>
+    <button class="tab" data-tab="shift">シフト管理</button>
     <button class="tab" data-tab="setup">作業スケジュール作成</button>
     <button class="tab" data-tab="settings">設定</button>
   </nav>
+  <!-- 仮の切り替え（従業員用画面ができたら、この .mode ブロックごと削除できます） -->
+  <div class="mode" data-temp>
+    <span class="temp">仮</span><span>表示切替</span>
+    <div class="mgroup">
+      <button type="button" class="mbtn active" data-mode="admin">管理者</button>
+      <button type="button" class="mbtn" data-mode="employee">従業員</button>
+    </div>
+  </div>
 </header>
 
 <main>
@@ -34,6 +43,40 @@
     </div>
     <div id="legend" class="legend"></div>
     <div id="gantt" class="gantt-wrap"></div>
+  </section>
+
+  <section id="shift" class="panel">
+    <div class="toolbar">
+      <div class="weeknav">
+        <button type="button" class="btn small" id="wPrev">‹ 前週</button>
+        <button type="button" class="btn small" id="wToday">今週</button>
+        <button type="button" class="btn small" id="wNext">翌週 ›</button>
+        <input type="date" id="wJump" aria-label="表示する週の日付">
+        <strong id="wLabel"></strong>
+        <span id="wStatus" class="pill"></span>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn" id="wCopy">前の週をコピー</button>
+        <button type="button" class="btn" id="wClear">この週を空にする</button>
+        <button type="button" class="btn primary" id="wPublish">確定する</button>
+      </div>
+    </div>
+    <p class="hint">マスをクリックして、日ごとの出勤・退勤・休憩を入れます。確定した週は従業員用画面に公開する予定です（確定中は編集できません）。</p>
+    <p id="wTotal" class="total"></p>
+    <div id="wGrid" class="gantt-wrap"></div>
+  </section>
+
+  <section id="employee" class="panel">
+    <div class="card placeholder">
+      <h2>従業員用画面（準備中）</h2>
+      <p>ここに従業員向けの画面を作ります。予定している内容：</p>
+      <ul>
+        <li>シフト希望の提出</li>
+        <li>確定したシフトの確認</li>
+        <li>自分の勤務時間・見込み給与の確認</li>
+      </ul>
+      <button type="button" class="btn primary" data-mode="admin">管理者画面に戻る</button>
+    </div>
   </section>
 
   <section id="setup" class="panel">
@@ -145,6 +188,14 @@
         <label>希望勤務時間の扱い<select id="aTarget"></select></label>
         <label>予備の出退勤時間<select id="aSub"></select></label>
       </div>
+      <div class="card">
+        <h2>シフトの注意ライン</h2>
+        <div class="row2">
+          <label>1日の勤務時間（時間）<input type="number" id="limDay" min="0.5" max="24" step="0.5"></label>
+          <label>1週間の勤務時間（時間）<input type="number" id="limWeek" min="0.5" max="168" step="0.5"></label>
+        </div>
+        <p class="meta">超えるとシフト管理の表に ⚠ が付きます。初期値は法定労働時間の原則（1日8時間・週40時間）です。事業所の規模や労使協定で上限が異なる場合があるため、実際の運用では厚生労働省の案内などで確認してください。</p>
+      </div>
     </div>
   </section>
 </main>
@@ -156,6 +207,31 @@
     <div class="actions">
       <button id="modalCancel" class="btn">キャンセル</button>
       <button id="modalOk" class="btn primary">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="shiftModal" class="modal" hidden>
+  <div class="dialog pop" role="dialog" aria-modal="true" aria-labelledby="sTitle">
+    <h2 id="sTitle"></h2>
+    <p id="sHint" class="meta"></p>
+    <div class="row2">
+      <div class="field">出勤<div id="sStart"></div></div>
+      <div class="field">退勤<div id="sEnd"></div></div>
+    </div>
+    <div class="shift-quick">
+      <button type="button" class="btn small" id="sFillMain">通常の時間を入れる</button>
+      <button type="button" class="btn small" id="sFillSub" hidden>予備の時間を入れる</button>
+    </div>
+    <label>休憩
+      <select id="sBreak"><option value="0">なし</option><option value="30">30分</option><option value="45">45分</option><option value="60">60分</option><option value="90">90分</option></select>
+    </label>
+    <p id="sInfo" class="meta"></p>
+    <p class="meta">休憩の目安：法定の最低は、6時間を超えると45分、8時間を超えると60分です。</p>
+    <div class="actions">
+      <button type="button" class="btn push-left" id="sDelete">休みにする</button>
+      <button type="button" class="btn" id="sCancel">キャンセル</button>
+      <button type="button" class="btn primary" id="sSave">保存</button>
     </div>
   </div>
 </div>

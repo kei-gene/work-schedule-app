@@ -24,10 +24,13 @@ function load() {
   if (!s || !Array.isArray(s.staff)) s = { staff: [], open: 9, close: 22, rules: {}, schedule: {} };
   s.roles = s.roles || DEF_ROLES;
   s.autoRules = s.autoRules || { preset: 'balance', ...PRESETS.balance.v };
+  s.shifts = s.shifts || {};        // { 日付: { スタッフID: { start, end, brk(休憩分) } } }
+  s.published = s.published || {};  // { 週の月曜日の日付: true }（確定済みの週）
   s.roleRules = s.roleRules || {};   // { 役割名: { min, max(null=上限なし) } }
   s.settings = s.settings || { display: 'JPY', rate: 150 };
   if (s.settings.auto === undefined) s.settings.auto = true;
   if (!s.settings.sort) s.settings.sort = { key: 'manual', desc: false };
+  if (s.settings.limitDay === undefined) { s.settings.limitDay = 8; s.settings.limitWeek = 40; }
   return s;
 }
 function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
@@ -131,13 +134,16 @@ function timeField(id) {
 }
 const getT = id => parseT($('#' + id + ' input').value);
 const setT = (id, t) => { const i = $('#' + id + ' input'); i.value = t || ''; i.classList.remove('bad'); };
-['fStart', 'fEnd', 'fStart2', 'fEnd2'].forEach(timeField);
+['fStart', 'fEnd', 'fStart2', 'fEnd2', 'sStart', 'sEnd'].forEach(timeField);
 
 /* ========== タブ ========== */
+let curTab = 'home';
 function switchTab(name) {
+  curTab = name;
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === name));
   if (name === 'home') renderGantt();
+  if (name === 'shift') renderShift();
 }
 document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
@@ -322,6 +328,7 @@ $('#staffList').addEventListener('click', async e => {
     const s = state.staff.find(x => x.id === del);
     if (!await ui.ask(`${s.name}さんを削除します。スケジュールからも外れます。`, { ok: '削除する', danger: true })) return;
     state.staff = state.staff.filter(x => x.id !== del); delete state.schedule[del];
+    Object.values(state.shifts).forEach(m => delete m[del]);
     save(); renderStaffList(); renderGantt(); renderRoles(); ui.toast('削除しました');
   }
 });
@@ -625,6 +632,160 @@ async function runAuto() {
 $('#btnAuto').addEventListener('click', runAuto);
 $('#btnAutoHome').addEventListener('click', runAuto);
 
+/* ========== シフト管理（管理者用） ========== */
+const DAY_W = 112, DOW = ['日', '月', '火', '水', '木', '金', '土'];
+const pad2 = n => String(n).padStart(2, '0');
+const ymd = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const parseYmd = t => { const [y, m, d] = t.split('-').map(Number); return new Date(y, m - 1, d); };
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const mondayOf = d => addDays(new Date(d.getFullYear(), d.getMonth(), d.getDate()), -((d.getDay() + 6) % 7));
+const tmin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const fh = x => String(Math.round(x * 100) / 100);
+const shiftHours = sh => Math.max(0, (tmin(sh.end) - tmin(sh.start) - (sh.brk || 0)) / 60);
+const legalBreak = h => h > 8 ? 60 : h > 6 ? 45 : 0;   // 法定の最低休憩の目安（6時間超45分／8時間超60分）
+let weekStart = mondayOf(new Date());
+const weekKeys = () => Array.from({ length: 7 }, (_, i) => ymd(addDays(weekStart, i)));
+const dayShifts = k => state.shifts[k] || {};
+const hasShifts = k => Object.keys(dayShifts(k)).length > 0;
+const isPublished = () => !!state.published[ymd(weekStart)];
+
+function renderShift() {
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), keys = days.map(ymd), pub = isPublished();
+  $('#wLabel').textContent = `${days[0].getFullYear()}年 ${days[0].getMonth() + 1}/${days[0].getDate()}〜${days[6].getMonth() + 1}/${days[6].getDate()}`;
+  $('#wStatus').textContent = pub ? '確定済み' : '下書き'; $('#wStatus').className = 'pill' + (pub ? ' ok' : '');
+  $('#wPublish').textContent = pub ? '確定を解除' : '確定する';
+  $('#wJump').value = keys[0];
+  const wrap = $('#wGrid'); wrap.classList.toggle('locked', pub);
+  if (!state.staff.length) { wrap.innerHTML = '<div class="empty">スタッフがまだいません。「作業スケジュール作成」タブから登録してください。</div>'; $('#wTotal').textContent = ''; return; }
+  const today = ymd(new Date()), anyWage = state.staff.some(s => s.wage), L = state.settings;
+  const dayCount = Array(7).fill(0), dayCost = Array(7).fill(0);
+  let grand = 0, grandCost = 0;
+  let html = `<table class="gantt shiftgrid" style="width:${NAME_W + 7 * DAY_W}px"><colgroup><col style="width:${NAME_W}px">` + keys.map(() => `<col style="width:${DAY_W}px">`).join('') +
+    '</colgroup><thead><tr><th class="name">スタッフ</th>' +
+    days.map((d, i) => `<th class="${keys[i] === today ? 'today ' : ''}${d.getDay() === 0 ? 'sun' : d.getDay() === 6 ? 'sat' : ''}">${d.getMonth() + 1}/${d.getDate()}（${DOW[d.getDay()]}）</th>`).join('') + '</tr></thead><tbody>';
+  state.staff.forEach(s => {
+    let wh = 0;
+    const cells = keys.map((k, i) => {
+      const sh = dayShifts(k)[s.id];
+      if (!sh) return `<td class="scell empty" data-id="${s.id}" data-d="${k}">＋</td>`;
+      const hrs = shiftHours(sh), over = hrs > L.limitDay;
+      wh += hrs; dayCount[i]++; dayCost[i] += hrs * hourly(s);
+      return `<td class="scell on${over ? ' over' : ''}" style="background:${roleColor(s.role)}" data-id="${s.id}" data-d="${k}">${sh.start}–${sh.end}<small>${fh(hrs)}時間${over ? ' ⚠' : ''}</small></td>`;
+    }).join('');
+    const cost = wh * hourly(s), overW = wh > L.limitWeek;
+    grand += wh; grandCost += cost;
+    html += `<tr><th class="name"><b>${esc(s.name)}</b><div class="meta">${esc(s.role || '役割なし')}</div>
+      <div class="meta${overW ? ' warnText' : ''}">週${fh(wh)}時間${s.wage ? '・' + money(cost) : ''}${overW ? ' ⚠' : ''}</div></th>${cells}</tr>`;
+  });
+  html += '</tbody><tfoot><tr><th class="name">出勤人数</th>' + dayCount.map(n => `<td>${n}人</td>`).join('') + '</tr>';
+  if (anyWage) html += '<tr><th class="name">人件費</th>' + dayCost.map(c => `<td>${c ? money(c) : '—'}</td>`).join('') + '</tr>';
+  wrap.innerHTML = html + '</tfoot></table>';
+  $('#wTotal').textContent = grand ? `この週の合計　${fh(grand)}時間${anyWage ? '・' + money(grandCost) : ''}` : '';
+}
+
+/* 週の移動 */
+const setWeek = d => { weekStart = mondayOf(d); renderShift(); };
+$('#wPrev').addEventListener('click', () => setWeek(addDays(weekStart, -7)));
+$('#wNext').addEventListener('click', () => setWeek(addDays(weekStart, 7)));
+$('#wToday').addEventListener('click', () => setWeek(new Date()));
+$('#wJump').addEventListener('change', () => { if ($('#wJump').value) setWeek(parseYmd($('#wJump').value)); });
+
+const lockedMsg = () => ui.toast('確定済みの週です。変更するには「確定を解除」を押してください', 'warn');
+$('#wCopy').addEventListener('click', async () => {
+  if (isPublished()) return lockedMsg();
+  const keys = weekKeys(), prev = keys.map(k => ymd(addDays(parseYmd(k), -7)));
+  if (!prev.some(hasShifts)) return ui.toast('前の週にシフトがありません', 'warn');
+  if (keys.some(hasShifts) && !await ui.ask('この週のシフトを、前の週の内容で上書きします。よろしいですか？', { ok: '上書きする', danger: true })) return;
+  keys.forEach((k, i) => { if (hasShifts(prev[i])) state.shifts[k] = JSON.parse(JSON.stringify(state.shifts[prev[i]])); else delete state.shifts[k]; });
+  save(); renderShift(); ui.toast('前の週のシフトをコピーしました');
+});
+$('#wClear').addEventListener('click', async () => {
+  if (isPublished()) return lockedMsg();
+  const keys = weekKeys();
+  if (!keys.some(hasShifts)) return ui.toast('この週にシフトはありません', 'warn');
+  if (!await ui.ask('この週のシフトをすべて消します。よろしいですか？', { ok: '空にする', danger: true })) return;
+  keys.forEach(k => delete state.shifts[k]); save(); renderShift(); ui.toast('この週のシフトを空にしました');
+});
+$('#wPublish').addEventListener('click', async () => {
+  const wk = ymd(weekStart);
+  if (isPublished()) { delete state.published[wk]; save(); renderShift(); return ui.toast('確定を解除しました（下書きに戻しました）'); }
+  if (!weekKeys().some(hasShifts)) return ui.toast('確定するシフトがありません', 'warn');
+  if (!await ui.ask('この週のシフトを確定します。確定中は編集できません（解除すればまた編集できます）。', { ok: '確定する' })) return;
+  state.published[wk] = true; save(); renderShift(); ui.toast('この週のシフトを確定しました');
+});
+
+/* マスの編集ダイアログ */
+let editShift = null;
+const shiftEl = $('#shiftModal');
+const closeShift = () => { shiftEl.hidden = true; editShift = null; };
+function updateShiftInfo() {
+  const a = getT('sStart'), b = getT('sEnd'), brk = +$('#sBreak').value, el = $('#sInfo');
+  if (!a || !b || tmin(b) <= tmin(a) || !editShift) { el.textContent = ''; return; }
+  const hrs = Math.max(0, (tmin(b) - tmin(a) - brk) / 60), s = state.staff.find(x => x.id === editShift.id);
+  el.textContent = `実働 ${fh(hrs)}時間` + (s.wage ? `・${money(hrs * hourly(s))}` : '') +
+    (hrs > state.settings.limitDay ? `　⚠ 1日の注意ライン（${state.settings.limitDay}時間）を超えています` : '');
+}
+function setBreak(v) {
+  const sel = $('#sBreak'), b = String(v || 0);
+  if (![...sel.options].some(o => o.value === b)) sel.add(new Option(b + '分', b));
+  sel.value = b;
+}
+function openShift(id, date) {
+  const s = state.staff.find(x => x.id === id), cur = dayShifts(date)[id];
+  editShift = { id, date };
+  $('#sTitle').textContent = `${s.name}　${date.replace(/-/g, '/')}（${DOW[parseYmd(date).getDay()]}）`;
+  $('#sHint').textContent = `通常の出勤時間：${s.start}–${s.end}` + (s.start2 ? `／予備：${s.start2}–${s.end2}` : '');
+  $('#sFillSub').hidden = !s.start2;
+  setT('sStart', cur ? cur.start : ''); setT('sEnd', cur ? cur.end : ''); setBreak(cur ? cur.brk : 0);
+  $('#sDelete').hidden = !cur; $('#sSave').textContent = cur ? '変更を保存' : '保存';
+  updateShiftInfo(); shiftEl.hidden = false; $('#sStart input').focus();
+}
+$('#wGrid').addEventListener('click', e => {
+  const td = e.target.closest('.scell'); if (!td) return;
+  if (isPublished()) return lockedMsg();
+  openShift(td.dataset.id, td.dataset.d);
+});
+const fillShift = (a, b) => { setT('sStart', a); setT('sEnd', b); setBreak(legalBreak((tmin(b) - tmin(a)) / 60)); updateShiftInfo(); };
+$('#sFillMain').addEventListener('click', () => { const s = state.staff.find(x => x.id === editShift.id); fillShift(s.start, s.end); });
+$('#sFillSub').addEventListener('click', () => { const s = state.staff.find(x => x.id === editShift.id); fillShift(s.start2, s.end2); });
+['click', 'input', 'change', 'focusout'].forEach(ev => shiftEl.addEventListener(ev, () => editShift && updateShiftInfo()));
+$('#sCancel').addEventListener('click', closeShift);
+shiftEl.addEventListener('click', e => { if (e.target === shiftEl) closeShift(); });
+shiftEl.addEventListener('keydown', e => { if (e.key === 'Escape') closeShift(); });
+$('#sDelete').addEventListener('click', () => {
+  const { id, date } = editShift;
+  delete state.shifts[date][id]; if (!hasShifts(date)) delete state.shifts[date];
+  save(); closeShift(); renderShift(); ui.toast('休みにしました');
+});
+$('#sSave').addEventListener('click', () => {
+  const a = getT('sStart'), b = getT('sEnd'), brk = +$('#sBreak').value;
+  if (a === null || b === null) return ui.toast('時刻の形式が正しくありません。9:00 や 0900 のように入力してください', 'err');
+  if (!a || !b) return ui.toast('出勤と退勤の時間を入れてください', 'err');
+  if (tmin(b) <= tmin(a)) return ui.toast('退勤は出勤より後にしてください', 'err');
+  if (brk >= tmin(b) - tmin(a)) return ui.toast('休憩が勤務時間より長くなっています', 'err');
+  const { id, date } = editShift;
+  (state.shifts[date] = state.shifts[date] || {})[id] = { start: a, end: b, brk };
+  save(); closeShift(); renderShift(); ui.toast('シフトを保存しました');
+});
+
+/* 注意ラインの設定 */
+function renderLimits() { $('#limDay').value = state.settings.limitDay; $('#limWeek').value = state.settings.limitWeek; }
+['limDay', 'limWeek'].forEach(id => $('#' + id).addEventListener('change', () => {
+  const d = +$('#limDay').value, w = +$('#limWeek').value;
+  if (!(d > 0) || !(w > 0)) { ui.toast('0より大きい数を入れてください', 'err'); renderLimits(); return; }
+  state.settings.limitDay = d; state.settings.limitWeek = w; save(); ui.toast('注意ラインを更新しました');
+  if (curTab === 'shift') renderShift();
+}));
+
+/* ---- 管理者／従業員の表示切替（仮） ---- */
+function setMode(m) {
+  document.body.dataset.mode = m;
+  document.querySelectorAll('.mbtn').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+  if (m === 'employee') document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'employee'));
+  else switchTab(curTab);
+}
+document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
 /* ========== スタッフ一括登録 ========== */
 const ROLE_PALETTE = ['#0f6e6e', '#3b6fb6', '#b45f06', '#a23b5a', '#5b7a2f', '#6b5b95', '#8a6d1d', '#2f7d9a'];
 const BULK_SAMPLE = '田中太郎,レジ,4,6,1100,9:00,15:00,15:00,18:00\nSarah Lee,接客,5,5,$15,12:00,18:00,,\n佐藤花子,調理,3,8,1200,10:00,18:00,,';
@@ -693,5 +854,5 @@ $('#bulkImport').addEventListener('click', () => {
 });
 
 /* ========== 初期化 ========== */
-resetForm(); renderRoles(); renderConditions(); renderSettings(); renderTimeRange(); renderAutoRules(); renderSortBar(); renderGantt();
+resetForm(); renderRoles(); renderConditions(); renderSettings(); renderLimits(); renderTimeRange(); renderAutoRules(); renderSortBar(); renderGantt();
 if (state.settings.auto) fetchRate(false);   // ページを開くたびに最新レートを取得
