@@ -129,3 +129,13 @@ input:focus,select:focus{border-color:var(--accent);outline:none;box-shadow:0 0 
 .check{display:flex;align-items:center;gap:8px;color:var(--ink);font-size:13px}
 .check input{width:auto;margin:0}
 .wage .btn{white-space:nowrap}
+
+/* ---- 並び替え ---- */
+.sortbar{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.sortbar label.inline{display:flex;align-items:center;gap:8px;margin:0;color:var(--ink);font-size:13px}
+.sortbar select{width:auto;margin:0;padding:5px 8px}
+.grip{color:var(--sub);cursor:grab;user-select:none;font-size:18px}
+.staff-list li.drag{opacity:.4}
+.staff-list li.over{box-shadow:0 -2px 0 var(--accent)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn:disabled:hover{border-color:var(--line)}

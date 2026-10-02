@@ -16,6 +16,7 @@ function load() {
   s.roles = s.roles || DEF_ROLES;
   s.settings = s.settings || { display: 'JPY', rate: 150 };
   if (s.settings.auto === undefined) s.settings.auto = true;
+  if (!s.settings.sort) s.settings.sort = { key: 'manual', desc: false };
   return s;
 }
 function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
@@ -129,8 +130,55 @@ function switchTab(name) {
 }
 document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
+/* ========== ホームの並び替え ========== */
+const SORTS = {
+  manual:   { label: '登録順', desc: false },
+  role:     { label: '役割別（役割管理の並び順）', desc: false },
+  start:    { label: '出勤時間順', desc: false },
+  rating:   { label: '評価', desc: true },
+  hours:    { label: '勤務時間の長さ', desc: true },
+  shortage: { label: '希望時間との不足', desc: true },
+  wage:     { label: '時給', desc: true },
+  name:     { label: '名前（あいうえお）', desc: false }
+};
+const mineOf = s => state.schedule[s.id] || [];
+const SORT_VAL = {
+  role: s => { const k = state.roles.findIndex(r => r.name === s.role); return k < 0 ? 999 : k; },      // 役割なしは最後
+  start: s => { const m = mineOf(s); return m.length ? Math.min(...m) : 100 + (mainHours(s)[0] ?? 99); }, // 勤務なしは最後
+  rating: s => s.rating,
+  hours: s => mineOf(s).length,
+  shortage: s => (s.hours || mainHours(s).length) - mineOf(s).length,
+  wage: s => hourly(s),
+  name: s => s.name
+};
+function sortedStaff() {
+  const { key, desc } = state.settings.sort, f = SORT_VAL[key];
+  const arr = state.staff.map((s, i) => ({ s, i, v: f ? f(s) : i }));
+  arr.sort((a, b) => {
+    let c = typeof a.v === 'string' ? a.v.localeCompare(b.v, 'ja') : a.v - b.v;
+    if (desc) c = -c;
+    return c || (key === 'role' ? SORT_VAL.start(a.s) - SORT_VAL.start(b.s) : 0) || a.i - b.i;
+  });
+  return arr.map(x => x.s);
+}
+function renderSortBar() {
+  const sv = state.settings.sort, b = $('#hDir');
+  if (!SORTS[sv.key]) { sv.key = 'manual'; sv.desc = false; }
+  $('#hSort').value = sv.key; b.disabled = sv.key === 'manual';
+  b.textContent = sv.desc ? '▼ 降順' : '▲ 昇順';
+}
+$('#hSort').innerHTML = Object.entries(SORTS).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
+$('#hSort').addEventListener('change', () => {
+  const k = $('#hSort').value;
+  state.settings.sort = { key: k, desc: SORTS[k].desc }; save(); renderSortBar(); renderGantt();
+});
+$('#hDir').addEventListener('click', () => {
+  state.settings.sort.desc = !state.settings.sort.desc; save(); renderSortBar(); renderGantt();
+});
+
 /* ========== ホーム ========== */
-function renderGantt() {
+let viewOrder = null; // マスの編集中に行が動かないよう、並び順は並び替え・再作成などの時だけ更新する
+function renderGantt(keep) {
   const H = hoursList(), wrap = $('#gantt');
   $('#legend').innerHTML = state.roles.map(r => `<span><i style="background:${r.color}"></i>${esc(r.name)}</span>`).join('') +
     '<span><i style="background:#5f6b76"></i>役割なし</span><span><i style="background:#f3faf9;border:1px solid #ccc"></i>出勤可能</span><span><i style="background:#fbf6ea;border:1px solid #ccc"></i>予備時間</span>';
@@ -139,8 +187,11 @@ function renderGantt() {
     wrap.innerHTML = '<div class="empty">スタッフがまだいません。「作業スケジュール作成」タブから登録してください。</div>';
     $('#total').textContent = ''; return;
   }
+  if (!keep || !viewOrder) viewOrder = sortedStaff().map(s => s.id);
+  const rows = viewOrder.map(id => state.staff.find(s => s.id === id)).filter(Boolean)
+    .concat(state.staff.filter(s => !viewOrder.includes(s.id)));
   let html = '<table class="gantt"><thead><tr><th class="name">スタッフ</th>' + H.map(h => `<th>${fmt(h)}</th>`).join('') + '</tr></thead><tbody>';
-  state.staff.forEach(s => {
+  rows.forEach(s => {
     const mine = state.schedule[s.id] || [], m = mainHours(s), b = subHours(s), color = roleColor(s.role);
     const cost = hourly(s) * mine.length; total += cost;
     html += `<tr><th class="name"><b>${esc(s.name)}</b><div class="meta">${esc(s.role || '役割なし')} ／ <span class="stars">${stars(s.rating)}</span></div>
@@ -170,7 +221,7 @@ $('#gantt').addEventListener('click', async e => {
     if (td.classList.contains('off') && !await ui.ask('出勤可能時間外のマスです。\nこの時間に勤務を追加しますか？', { ok: '追加する' })) return;
     arr.push(h);
   }
-  save(); renderGantt();
+  save(); renderGantt(true);
 });
 $('#btnClear').addEventListener('click', async () => {
   if (await ui.ask('現在のスケジュールをすべて消去します。よろしいですか？', { ok: '消去する', danger: true })) {
@@ -334,7 +385,9 @@ let editingRole = null;
 function renderRoles() {
   $('#roleList').innerHTML = state.roles.length ? state.roles.map((r, i) => {
     const n = state.staff.filter(s => s.role === r.name).length;
-    return `<li><div class="info"><span class="badge" style="background:${r.color}">${esc(r.name)}</span> <span class="meta">${n}人</span></div>
+    return `<li draggable="true" data-ri="${i}"><span class="grip" title="ドラッグで並び替え">⠿</span><div class="info"><span class="badge" style="background:${r.color}">${esc(r.name)}</span> <span class="meta">${n}人</span></div>
+      <button class="btn small" data-rup="${i}"${i === 0 ? ' disabled' : ''} aria-label="上へ">▲</button>
+      <button class="btn small" data-rdn="${i}"${i === state.roles.length - 1 ? ' disabled' : ''} aria-label="下へ">▼</button>
       <button class="btn small" data-redit="${i}">編集</button>
       <button class="btn small" data-rdel="${i}">削除</button></li>`;
   }).join('') : '<li class="meta">役割がありません。上のフォームから追加してください。</li>';
@@ -375,6 +428,39 @@ $('#roleList').addEventListener('click', async e => {
     state.roles.splice(del, 1); save(); resetRoleForm(); renderRoles(); renderGantt(); ui.toast('役割を削除しました');
   }
 });
+
+/* ---- 役割の並び替え（▲▼ボタン / ドラッグ） ---- */
+function moveRole(from, to) {
+  if (to < 0 || to >= state.roles.length || from === to) return;
+  const ed = editingRole != null ? state.roles[editingRole] : null;
+  const [r] = state.roles.splice(from, 1); state.roles.splice(to, 0, r);
+  editingRole = ed ? state.roles.indexOf(ed) : null;
+  save(); renderRoles(); renderGantt();
+}
+let dragRole = null;
+const roleLis = () => document.querySelectorAll('#roleList li');
+$('#roleList').addEventListener('click', e => {
+  const up = e.target.dataset.rup, dn = e.target.dataset.rdn;
+  if (up != null) moveRole(+up, +up - 1);
+  if (dn != null) moveRole(+dn, +dn + 1);
+});
+$('#roleList').addEventListener('dragstart', e => {
+  const li = e.target.closest('li[data-ri]'); if (!li) return;
+  dragRole = +li.dataset.ri; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', ''); li.classList.add('drag');
+});
+$('#roleList').addEventListener('dragover', e => {
+  if (dragRole == null) return;
+  e.preventDefault();
+  const li = e.target.closest('li[data-ri]');
+  roleLis().forEach(x => x.classList.toggle('over', x === li && +x.dataset.ri !== dragRole));
+});
+$('#roleList').addEventListener('drop', e => {
+  e.preventDefault();
+  const li = e.target.closest('li[data-ri]');
+  if (li && dragRole != null) moveRole(dragRole, +li.dataset.ri);
+  dragRole = null;
+});
+$('#roleList').addEventListener('dragend', () => { dragRole = null; roleLis().forEach(x => x.classList.remove('drag', 'over')); });
 
 /* ========== 自動作成 ========== */
 function autoGenerate() {
@@ -427,5 +513,5 @@ $('#btnAuto').addEventListener('click', runAuto);
 $('#btnAutoHome').addEventListener('click', runAuto);
 
 /* ========== 初期化 ========== */
-resetForm(); renderRoles(); renderConditions(); renderSettings(); renderGantt();
+resetForm(); renderRoles(); renderConditions(); renderSettings(); renderSortBar(); renderGantt();
 if (state.settings.auto) fetchRate(false);   // ページを開くたびに最新レートを取得
