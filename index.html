@@ -48,34 +48,72 @@
   <section id="shift" class="panel">
     <div class="toolbar">
       <div class="weeknav">
-        <button type="button" class="btn small" id="wPrev">‹ 前週</button>
-        <button type="button" class="btn small" id="wToday">今週</button>
-        <button type="button" class="btn small" id="wNext">翌週 ›</button>
-        <input type="date" id="wJump" aria-label="表示する週の日付">
+        <button type="button" class="btn small" id="wPrev">‹ 前の期間</button>
+        <button type="button" class="btn small" id="wToday">今の期間</button>
+        <button type="button" class="btn small" id="wNext">次の期間 ›</button>
+        <input type="date" id="wJump" aria-label="表示する期間の日付">
         <strong id="wLabel"></strong>
         <span id="wStatus" class="pill"></span>
       </div>
       <div class="actions">
-        <button type="button" class="btn" id="wCopy">前の週をコピー</button>
-        <button type="button" class="btn" id="wClear">この週を空にする</button>
+        <button type="button" class="btn primary" id="wAuto">自動作成</button>
+        <button type="button" class="btn" id="wCopy">前の期間をコピー</button>
+        <button type="button" class="btn" id="wClear">この期間を空にする</button>
         <button type="button" class="btn primary" id="wPublish">確定する</button>
       </div>
     </div>
-    <p class="hint">マスをクリックして、日ごとの出勤・退勤・休憩を入れます。確定した週は従業員用画面に公開する予定です（確定中は編集できません）。</p>
+    <p class="hint">従業員が提出した希望が表に出ます（<b>休</b>＝希望休、<b>○</b>＝出勤可能、時間＝その時間だけ可能）。マスをクリックしてシフトを入れます。希望休の日に入れるときは確認が出ます。期間の長さは設定タブで変えられます。</p>
     <p id="wTotal" class="total"></p>
     <div id="wGrid" class="gantt-wrap"></div>
+    <div id="wReq" class="card reqpanel"></div>
   </section>
 
   <section id="employee" class="panel">
-    <div class="card placeholder">
-      <h2>従業員用画面（準備中）</h2>
-      <p>ここに従業員向けの画面を作ります。予定している内容：</p>
-      <ul>
-        <li>シフト希望の提出</li>
-        <li>確定したシフトの確認</li>
-        <li>自分の勤務時間・見込み給与の確認</li>
-      </ul>
-      <button type="button" class="btn primary" data-mode="admin">管理者画面に戻る</button>
+    <div class="emp">
+      <div class="emp-bar">
+        <label class="inline">従業員（仮）<select id="eWho"></select></label>
+        <div class="etabs">
+          <button type="button" class="etab active" data-etab="req">希望シフト</button>
+          <button type="button" class="etab" data-etab="rules">設定</button>
+        </div>
+      </div>
+      <p id="eNone" class="empty" hidden>スタッフがまだ登録されていません。管理者画面で登録してください。</p>
+      <div id="eBody">
+        <div id="eReq">
+          <div class="toolbar">
+            <div class="weeknav">
+              <button type="button" class="btn small" id="ePrev">‹ 前の期間</button>
+              <button type="button" class="btn small" id="eToday">今の期間</button>
+              <button type="button" class="btn small" id="eNext">次の期間 ›</button>
+              <strong id="eLabel"></strong>
+            </div>
+          </div>
+          <p class="hint">はじめは全日「出勤可能」です。下の項目を選んで日付をタップすると指定できます。同じ内容をもう一度タップすると指定が消えます。</p>
+          <div class="brushbar">
+            <button type="button" class="brush" data-brush="off">希望休</button>
+            <button type="button" class="brush" data-brush="time">時間を指定</button>
+            <button type="button" class="brush" data-brush="ok">出勤可能</button>
+            <button type="button" class="brush" data-brush="reset">指定を消す</button>
+            <span id="eTimeBox" class="timebox"><div id="eFrom"></div><span>〜</span><div id="eTo"></div></span>
+          </div>
+          <div id="eCal" class="cal"></div>
+          <div class="card submitbox">
+            <label>管理者へのコメント（任意）<textarea id="eComment" rows="3" maxlength="500" placeholder="例：第2週は試験があるので、早めの時間だけ入れると助かります"></textarea></label>
+            <div class="actions"><button type="button" class="btn primary" id="eSubmit">提出する</button><span id="eSubStatus" class="substatus"></span></div>
+          </div>
+        </div>
+        <div id="eRules" hidden>
+          <div class="card">
+            <h2>いつもの希望（毎週のルール）</h2>
+            <p class="meta">日付ごとの指定がない日に、自動で当てはまります。優先順位：日付ごとの指定 ＞ 曜日の指定 ＞ 平日・休日の指定 ＞ はじめの設定（出勤可能）。「休日」は土・日のことで、祝日は含みません。</p>
+            <table class="rules">
+              <thead><tr><th>対象</th><th>希望</th><th>時間</th><th></th></tr></thead>
+              <tbody id="eRulesBody"></tbody>
+            </table>
+            <div class="actions"><button type="button" class="btn" id="eRuleAdd">ルールを追加</button></div>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -194,7 +232,23 @@
           <label>1日の勤務時間（時間）<input type="number" id="limDay" min="0.5" max="24" step="0.5"></label>
           <label>1週間の勤務時間（時間）<input type="number" id="limWeek" min="0.5" max="168" step="0.5"></label>
         </div>
-        <p class="meta">超えるとシフト管理の表に ⚠ が付きます。初期値は法定労働時間の原則（1日8時間・週40時間）です。事業所の規模や労使協定で上限が異なる場合があるため、実際の運用では厚生労働省の案内などで確認してください。</p>
+        <label>連続勤務の上限（日）<input type="number" id="limStreak" min="1" max="30" step="1"></label>
+        <p class="meta">超えるとシフト管理の表に ⚠ が付き、自動作成でもこの範囲を守ります（連続勤務の上限も同様）。初期値は法定労働時間の原則（1日8時間・週40時間）です。事業所の規模や労使協定で上限が異なる場合があるため、実際の運用では厚生労働省の案内などで確認してください。</p>
+      </div>
+      <div class="card">
+        <h2>シフト表の期間</h2>
+        <label>期間の種類
+          <select id="pMode"><option value="month">月ごと（1か月）</option><option value="weeks">数週間ごと</option></select>
+        </label>
+        <div id="pMonthBox">
+          <label>月の開始日（例：16 なら 16日〜翌15日）<input type="number" id="pStart" min="1" max="28" step="1"></label>
+        </div>
+        <div id="pWeeksBox" class="row2">
+          <label>1期間の週数<select id="pWeeks"><option value="1">1週間</option><option value="2">2週間</option><option value="3">3週間</option><option value="4">4週間</option><option value="5">5週間</option><option value="6">6週間</option></select></label>
+          <label>最初の期間の開始日<input type="date" id="pAnchor"></label>
+        </div>
+        <p id="pNote" class="meta"></p>
+        <p class="meta">管理者のシフト表と、従業員の希望提出は、この期間ごとに区切られます。</p>
       </div>
     </div>
   </section>
@@ -215,6 +269,7 @@
   <div class="dialog pop" role="dialog" aria-modal="true" aria-labelledby="sTitle">
     <h2 id="sTitle"></h2>
     <p id="sHint" class="meta"></p>
+    <p id="sPref" class="meta"></p>
     <div class="row2">
       <div class="field">出勤<div id="sStart"></div></div>
       <div class="field">退勤<div id="sEnd"></div></div>

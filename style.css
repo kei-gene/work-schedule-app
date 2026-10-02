@@ -192,3 +192,65 @@ body[data-mode="employee"] .tabs{display:none}
 .dialog.pop{overflow:visible}
 .shift-quick{display:flex;gap:8px;margin-bottom:12px}
 .push-left{margin-right:auto}
+
+/* ---- 期間・希望の表示（管理者） ---- */
+.gantt thead th{height:48px}
+.shiftgrid thead small{display:block;font-weight:400;font-size:11px}
+.scell{font-size:12px}
+.scell.empty.pf-ok{color:#9fb0ae;background:#f7fbfa}
+.scell.empty.pf-off{background:#fde8e1;color:#b3261e;font-weight:700;font-size:14px}
+.scell.empty.pf-time{background:#fbf0d3;color:#8a5a00;font-size:11px;line-height:1.3;font-weight:700}
+.scell.empty.pf-time small{display:block;font-weight:400}
+.scell em.tag{display:block;font-style:normal;font-size:10px;background:rgba(255,255,255,.28);border-radius:3px;margin:2px 6px 0;font-weight:400}
+.reqpanel{margin-top:16px}
+.reqpanel h3{margin:0 0 8px;font-size:15px}
+.reqlist{list-style:none;margin:0;padding:0}
+.reqlist li{padding:10px 0;border-bottom:1px solid var(--line)}
+.reqlist li:last-child{border-bottom:0}
+.rq-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cmt{margin-top:6px;padding:8px 12px;background:#f5f7f9;border-left:3px solid var(--accent);border-radius:4px;white-space:pre-wrap;font-size:13px}
+/* ---- 従業員画面 ---- */
+.emp{max-width:920px;margin:0 auto}
+.emp-bar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.emp-bar label.inline{display:flex;align-items:center;gap:8px;margin:0;color:var(--ink);font-size:13px}
+.emp-bar select{width:auto;margin:0}
+.etabs{display:flex;gap:6px;margin-left:auto}
+.etab{border:1px solid var(--line);background:#fff;padding:7px 18px;border-radius:20px;cursor:pointer;font:inherit}
+.etab.active{background:#18323a;border-color:#18323a;color:#fff;font-weight:700}
+.brushbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 14px;padding:10px 12px;background:#fff;border:1px solid var(--line);border-radius:var(--radius)}
+.brush{border:1px solid var(--line);background:#fff;padding:8px 16px;border-radius:20px;cursor:pointer;font:inherit}
+.brush.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+.brush[data-brush="off"].active{background:#c2410c;border-color:#c2410c}
+.brush[data-brush="time"].active{background:#b7791f;border-color:#b7791f}
+.timebox{display:inline-flex;align-items:center;gap:6px}
+.timebox[hidden]{display:none}
+.timebox .time{width:136px;margin:0}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.cal .dow{text-align:center;font-size:12px;color:var(--sub);padding:2px 0}
+.cday{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 4px;min-height:84px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;font:inherit;color:var(--ink)}
+.cday.blank{visibility:hidden;cursor:default}
+.cday .dn{font-weight:700;font-size:14px}
+.cday .dn i{font-style:normal;font-size:10px;color:var(--sub);margin-left:3px;font-weight:400}
+.cday .st{font-size:12px;color:var(--sub)}
+.cday.ok{background:#f3faf9}
+.cday.off{background:#fde8e1;border-color:#e9b3a1}
+.cday.off .st{color:#b3261e;font-weight:700}
+.cday.time{background:#fbf0d3;border-color:#e4c77a}
+.cday.time .st{color:#8a5a00;font-weight:700;font-size:11px}
+.cday.sat .dn{color:#2b5fb4}
+.cday.sun .dn{color:#b3261e}
+.cday .src{font-style:normal;font-size:10px;color:var(--sub);border:1px solid var(--line);border-radius:3px;padding:0 3px}
+.cday .conf{font-size:10px;background:#0f6e6e;color:#fff;border-radius:3px;padding:1px 4px;margin-top:auto}
+.submitbox{margin-top:18px}
+.submitbox textarea{width:100%;border:1px solid var(--line);border-radius:var(--radius);padding:10px;font:inherit;resize:vertical;margin-top:4px}
+.submitbox .actions{align-items:center}
+.substatus{color:var(--sub);font-size:13px}
+.substatus.ok{color:var(--accent-d);font-weight:700}
+.substatus.warn{color:var(--warn);font-weight:700}
+@media (max-width:700px){
+  main{padding:14px 10px 30px}
+  .top{flex-wrap:wrap;height:auto;padding:8px 14px;gap:10px}
+  .cday{min-height:68px;padding:4px 2px}
+  .cday .st{font-size:11px}
+  .cal{gap:4px}
+}
