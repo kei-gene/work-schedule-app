@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>シフト・作業スケジュール</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <h1>シフト・作業スケジュール</h1>
+  <nav class="tabs">
+    <button class="tab active" data-tab="home">ホーム</button>
+    <button class="tab" data-tab="setup">作業スケジュール作成</button>
+    <button class="tab" data-tab="settings">設定</button>
+  </nav>
+</header>
+
+<main>
+  <section id="home" class="panel active">
+    <div class="toolbar">
+      <div>
+        <p class="hint">マスをクリックすると、その時間の勤務を入れたり外したりできます。</p>
+        <p id="total" class="total"></p>
+      </div>
+      <div class="actions">
+        <button id="btnAutoHome" class="btn primary">自動作成</button>
+        <button id="btnClear" class="btn">スケジュールを消去</button>
+      </div>
+    </div>
+    <div id="legend" class="legend"></div>
+    <div id="gantt" class="gantt-wrap"></div>
+  </section>
+
+  <section id="setup" class="panel">
+    <div class="cols">
+      <div class="card">
+        <h2 id="formTitle">スタッフを登録</h2>
+        <form id="staffForm" autocomplete="off" novalidate>
+          <label>名前<input type="text" id="fName"></label>
+          <label>役割<select id="fRole"></select></label>
+          <div class="field">評価<div id="fStars" class="stars input"></div></div>
+          <div class="row2">
+            <label>希望勤務時間（時間）<input type="number" id="fHours" min="1" max="24" placeholder="例 6"></label>
+            <label>希望給料（時給）
+              <div class="wage"><input type="number" id="fWage" min="0" step="any" placeholder="例 1100">
+                <select id="fCur"><option value="JPY">円</option><option value="USD">ドル</option></select></div>
+            </label>
+          </div>
+          <div class="row2">
+            <div class="field">出勤時間<div id="fStart"></div></div>
+            <div class="field">退勤時間<div id="fEnd"></div></div>
+          </div>
+          <div class="row2">
+            <div class="field">出勤時間（予備）<div id="fStart2"></div></div>
+            <div class="field">退勤時間（予備）<div id="fEnd2"></div></div>
+          </div>
+          <div class="actions">
+            <button type="submit" class="btn primary" id="fSubmit">登録する</button>
+            <button type="button" class="btn" id="fCancel" hidden>編集をやめる</button>
+          </div>
+        </form>
+        <h2 class="sub">登録済みスタッフ</h2>
+        <ul id="staffList" class="staff-list"></ul>
+      </div>
+
+      <div class="card">
+        <h2>自動作成の条件</h2>
+        <div class="row2">
+          <label>開始時刻<select id="cOpen"></select></label>
+          <label>終了時刻<select id="cClose"></select></label>
+        </div>
+        <div class="bulk">
+          <b>一括設定</b>
+          <div class="bulk-row">
+            <select id="bFrom"></select><span>〜</span><select id="bTo"></select>
+            <label>最低<input type="number" id="bMin" min="0" max="99" value="1"></label>
+            <label>最高<input type="number" id="bMax" min="0" max="99" value="3"></label>
+            <button type="button" class="btn" id="bApply">この範囲に適用</button>
+          </div>
+        </div>
+        <table class="rules">
+          <thead><tr><th>時間帯</th><th>最低人数</th><th>最高人数</th></tr></thead>
+          <tbody id="ruleBody"></tbody>
+        </table>
+        <div class="actions"><button id="btnAuto" class="btn primary big">自動作成</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="settings" class="panel">
+    <div class="cols">
+      <div class="card">
+        <h2>通貨と為替</h2>
+        <label>金額の表示通貨
+          <select id="sCur"><option value="JPY">円（JPY）</option><option value="USD">ドル（USD）</option></select>
+        </label>
+        <label class="check"><input type="checkbox" id="sAuto"> ページを開くたびに最新の為替レートを自動取得する</label>
+        <label>為替レート（1ドル＝何円か）
+          <div class="wage"><input type="number" id="sRate" min="0.01" step="0.01"><button type="button" class="btn" id="sFetch">今すぐ更新</button></div>
+        </label>
+        <p id="rateStatus" class="meta"></p>
+        <p class="meta">スタッフごとに時給を円・ドルのどちらでも入力でき、人件費は表示通貨に換算して集計します。自動取得をオフにすると、レートを手入力できます。</p>
+      </div>
+      <div class="card">
+        <h2>役割の管理</h2>
+        <form id="roleForm" class="role-form" autocomplete="off">
+          <input type="text" id="rName" placeholder="役割の名前（例 レジ）" maxlength="12">
+          <input type="color" id="rColor" value="#0f6e6e" aria-label="色">
+          <button class="btn primary" type="submit" id="rSubmit">追加</button>
+          <button class="btn" type="button" id="rCancel" hidden>やめる</button>
+        </form>
+        <ul id="roleList" class="staff-list"></ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<div id="modal" class="modal" hidden>
+  <div class="dialog" role="dialog" aria-modal="true">
+    <p id="modalMsg"></p>
+    <div class="actions">
+      <button id="modalCancel" class="btn">キャンセル</button>
+      <button id="modalOk" class="btn primary">OK</button>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
