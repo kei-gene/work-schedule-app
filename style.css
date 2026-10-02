@@ -139,3 +139,6 @@ input:focus,select:focus{border-color:var(--accent);outline:none;box-shadow:0 0 
 .staff-list li.over{box-shadow:0 -2px 0 var(--accent)}
 .btn:disabled{opacity:.4;cursor:default}
 .btn:disabled:hover{border-color:var(--line)}
+
+.rr-title{font-size:14px;margin:22px 0 4px}
+.rules .badge{margin:0}

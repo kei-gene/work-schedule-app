@@ -14,6 +14,7 @@ function load() {
   try { s = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* 破損時は初期化 */ }
   if (!s || !Array.isArray(s.staff)) s = { staff: [], open: 9, close: 22, rules: {}, schedule: {} };
   s.roles = s.roles || DEF_ROLES;
+  s.roleRules = s.roleRules || {};   // { 役割名: { min, max(null=上限なし) } }
   s.settings = s.settings || { display: 'JPY', rate: 150 };
   if (s.settings.auto === undefined) s.settings.auto = true;
   if (!s.settings.sort) s.settings.sort = { key: 'manual', desc: false };
@@ -83,7 +84,7 @@ function parseT(raw) {
   else return null;
   if (!/^\d{1,2}$/.test(h) || !/^\d{1,2}$/.test(m)) return null;
   h = +h; m = +m;
-  if (h > 24 || m > 59 || (h === 24 && m > 0)) return null;
+  if (h > 28 || m > 59 || (h === 28 && m > 0)) return null;   // 深夜帯は28:00（翌4:00）まで
   return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
 }
 const closePops = () => document.querySelectorAll('.tpop').forEach(p => p.hidden = true);
@@ -94,7 +95,7 @@ function timeField(id) {
   el.className = 'time';
   el.innerHTML = '<input type="text" inputmode="numeric" maxlength="6" placeholder="--:--" autocomplete="off">' +
     '<button type="button" class="tbtn" aria-label="時刻を選ぶ">▾</button>' +
-    '<div class="tpop" hidden><div class="tcol" data-k="h">' + Array.from({ length: 25 }, (_, i) => `<button type="button">${pad(i)}</button>`).join('') +
+    '<div class="tpop" hidden><div class="tcol" data-k="h">' + Array.from({ length: 29 }, (_, i) => `<button type="button"${i >= 24 ? ` title="翌${i - 24}:00台"` : ''}>${pad(i)}</button>`).join('') +
     '</div><div class="tcol" data-k="m">' + ['00', '15', '30', '45'].map(m => `<button type="button">${m}</button>`).join('') +
     '</div><button type="button" class="btn small tclear">クリア</button></div>';
   const inp = el.querySelector('input'), pop = el.querySelector('.tpop');
@@ -114,7 +115,7 @@ function timeField(id) {
     inp.classList.remove('bad');
     if (b.classList.contains('tclear')) { inp.value = ''; pop.hidden = true; return; }
     const cur = parseT(inp.value) || '00:00', k = b.parentElement.dataset.k;
-    inp.value = k === 'h' ? b.textContent + ':' + (b.textContent === '24' ? '00' : cur.slice(3)) : cur.slice(0, 2) + ':' + b.textContent;
+    inp.value = k === 'h' ? b.textContent + ':' + (b.textContent === '28' ? '00' : cur.slice(3)) : cur.slice(0, 2) + ':' + b.textContent;
     if (k === 'm') pop.hidden = true; else mark();
   };
 }
@@ -208,7 +209,18 @@ function renderGantt(keep) {
     const c = state.staff.filter(s => (state.schedule[s.id] || []).includes(h)).length, r = rule(h);
     html += `<td class="${c < r.min ? 'low' : c > r.max ? 'high' : ''}">${c}<small>${r.min}〜${r.max}</small></td>`;
   });
-  wrap.innerHTML = html + '</tr></tfoot></table>';
+  html += '</tr>';
+  state.roles.forEach(ro => {
+    const q = state.roleRules[ro.name];
+    if (!q || (!q.min && q.max == null)) return;
+    html += `<tr><th class="name"><span style="color:${ro.color}">●</span> ${esc(ro.name)}の人数<small>${q.min}〜${q.max == null ? '制限なし' : q.max}</small></th>`;
+    H.forEach(h => {
+      const c = rows.filter(s => s.role === ro.name && (state.schedule[s.id] || []).includes(h)).length;
+      html += `<td class="${c < q.min ? 'low' : q.max != null && c > q.max ? 'high' : ''}">${c}</td>`;
+    });
+    html += '</tr>';
+  });
+  wrap.innerHTML = html + '</tfoot></table>';
   $('#total').textContent = total > 0 ? '人件費の合計　' + money(total) : '';
 }
 
@@ -307,8 +319,8 @@ $('#staffList').addEventListener('click', async e => {
 function renderConditions() {
   const opts = (from, to, sel, label = fmt) => Array.from({ length: to - from + 1 }, (_, i) => from + i)
     .map(h => `<option value="${h}"${h === sel ? ' selected' : ''}>${label(h)}</option>`).join('');
-  $('#cOpen').innerHTML = opts(0, 23, state.open);
-  $('#cClose').innerHTML = opts(1, 24, state.close);
+  $('#cOpen').innerHTML = opts(0, 27, state.open);
+  $('#cClose').innerHTML = opts(1, 28, state.close);
   $('#bFrom').innerHTML = opts(state.open, state.close - 1, state.open);
   $('#bTo').innerHTML = opts(state.open + 1, state.close, state.close);
   $('#ruleBody').innerHTML = hoursList().map(h => {
@@ -318,6 +330,22 @@ function renderConditions() {
       <td><input type="number" min="0" max="99" data-h="${h}" data-k="max" value="${r.max}"></td></tr>`;
   }).join('');
 }
+function renderRoleRules() {
+  $('#roleRuleBody').innerHTML = state.roles.length ? state.roles.map((r, i) => {
+    const q = state.roleRules[r.name] || { min: 0, max: null };
+    return `<tr><td><span class="badge" style="background:${r.color}">${esc(r.name)}</span></td>
+      <td><input type="number" min="0" max="99" data-ri="${i}" data-k="min" value="${q.min || 0}"></td>
+      <td><input type="number" min="0" max="99" data-ri="${i}" data-k="max" value="${q.max == null ? '' : q.max}" placeholder="なし"></td></tr>`;
+  }).join('') : '<tr><td colspan="3" class="meta">役割が未登録です。設定タブで追加してください。</td></tr>';
+}
+$('#roleRuleBody').addEventListener('change', e => {
+  const i = e.target.dataset.ri, k = e.target.dataset.k; if (i == null) return;
+  const name = state.roles[i].name, q = state.roleRules[name] || { min: 0, max: null }, raw = e.target.value.trim();
+  if (k === 'min') q.min = Math.max(0, +raw || 0);
+  else q.max = raw === '' ? null : Math.max(0, +raw || 0);
+  if (q.max != null && q.max < q.min) { if (k === 'min') q.max = q.min; else q.min = q.max; }
+  state.roleRules[name] = q; save(); renderRoleRules(); renderGantt();
+});
 ['#cOpen', '#cClose'].forEach(sel => $(sel).addEventListener('change', () => {
   const o = +$('#cOpen').value, c = +$('#cClose').value;
   if (c <= o) { ui.toast('終了時刻は開始時刻より後にしてください', 'err'); renderConditions(); return; }
@@ -391,7 +419,7 @@ function renderRoles() {
       <button class="btn small" data-redit="${i}">編集</button>
       <button class="btn small" data-rdel="${i}">削除</button></li>`;
   }).join('') : '<li class="meta">役割がありません。上のフォームから追加してください。</li>';
-  renderRoleSelect(); renderStaffList();
+  renderRoleSelect(); renderStaffList(); renderRoleRules();
 }
 function resetRoleForm() {
   editingRole = null; $('#rName').value = ''; $('#rColor').value = '#0f6e6e';
@@ -408,6 +436,7 @@ $('#roleForm').addEventListener('submit', e => {
     const r = state.roles[editingRole], old = r.name;
     r.name = name; r.color = color;
     state.staff.forEach(s => { if (s.role === old) s.role = name; }); // 名前変更をスタッフにも反映
+    if (old !== name && state.roleRules[old]) { state.roleRules[name] = state.roleRules[old]; delete state.roleRules[old]; }
     ui.toast(`役割「${name}」を変更しました`);
   }
   save(); resetRoleForm(); renderRoles(); renderGantt();
@@ -425,6 +454,7 @@ $('#roleList').addEventListener('click', async e => {
     const msg = users.length ? `役割「${r.name}」を削除します。${users.length}人のスタッフの役割は「選択なし」になります。` : `役割「${r.name}」を削除します。`;
     if (!await ui.ask(msg, { ok: '削除する', danger: true })) return;
     users.forEach(s => s.role = '');
+    delete state.roleRules[r.name];
     state.roles.splice(del, 1); save(); resetRoleForm(); renderRoles(); renderGantt(); ui.toast('役割を削除しました');
   }
 });
@@ -468,12 +498,17 @@ function autoGenerate() {
   H.forEach(h => { cnt[h] = 0; roleAt[h] = {}; });
   const P = state.staff.map(s => ({ s, main: mainHours(s), sub: subHours(s), target: s.hours || mainHours(s).length }));
   P.forEach(p => sch[p.s.id] = []);
+  const rr = state.roleRules;
+  const roleMax = r => (rr[r] && rr[r].max != null) ? rr[r].max : Infinity;
+  const roleMin = r => (rr[r] && rr[r].min) || 0;
+  const roleOK = (p, h) => !p.s.role || (roleAt[h][p.s.role] || 0) < roleMax(p.s.role);   // 役割ごとの最高人数
   const assign = (p, h) => { sch[p.s.id].push(h); cnt[h]++; roleAt[h][p.s.role] = (roleAt[h][p.s.role] || 0) + 1; };
   const score = (p, h) => {
     const mine = sch[p.s.id];
     if (mine.includes(h) || mine.length >= p.target) return -Infinity;
     const inMain = p.main.includes(h);
     if (!inMain && !p.sub.includes(h)) return -Infinity;
+    if (!roleOK(p, h)) return -Infinity;
     return p.s.rating * 2 + (inMain ? 3 : 0)
       + (mine.includes(h - 1) || mine.includes(h + 1) ? 2 : 0)
       + (p.target - mine.length) * 0.5
@@ -482,6 +517,15 @@ function autoGenerate() {
   };
   const avail = h => P.filter(p => score(p, h) > -Infinity).length;
   [...H].sort((a, b) => avail(a) - avail(b)).forEach(h => {
+    // 役割ごとの最低人数を先に満たす（全体の最高人数は超えない）
+    state.roles.forEach(ro => {
+      while ((roleAt[h][ro.name] || 0) < roleMin(ro.name) && cnt[h] < rule(h).max) {
+        let best = null, bs = -Infinity;
+        P.forEach(p => { if (p.s.role !== ro.name) return; const v = score(p, h); if (v > bs) { bs = v; best = p; } });
+        if (!best) break;
+        assign(best, h);
+      }
+    });
     while (cnt[h] < rule(h).min) {
       let best = null, bs = -Infinity;
       P.forEach(p => { const v = score(p, h); if (v > bs) { bs = v; best = p; } });
@@ -491,22 +535,26 @@ function autoGenerate() {
   });
   [...P].sort((a, b) => b.s.rating - a.s.rating).forEach(p => {
     while (sch[p.s.id].length < p.target) {
-      const cand = p.main.filter(h => H.includes(h) && !sch[p.s.id].includes(h) && cnt[h] < rule(h).max);
+      const cand = p.main.filter(h => H.includes(h) && !sch[p.s.id].includes(h) && cnt[h] < rule(h).max && roleOK(p, h));
       if (!cand.length) break;
       cand.sort((a, b) => (cnt[a] - rule(a).min) - (cnt[b] - rule(b).min) || score(p, b) - score(p, a));
       assign(p, cand[0]);
     }
   });
   state.schedule = sch; save();
-  return H.filter(h => cnt[h] < rule(h).min);
+  const roles = state.roles.map(r => [r.name, H.filter(h => (roleAt[h][r.name] || 0) < roleMin(r.name)).length]).filter(x => x[1] > 0);
+  return { hours: H.filter(h => cnt[h] < rule(h).min), roles };
 }
 async function runAuto() {
   if (!state.staff.length) return ui.toast('先にスタッフを登録してください', 'err');
   if (Object.values(state.schedule).some(a => a.length) &&
       !await ui.ask('現在のスケジュールは上書きされます。自動作成しますか？', { ok: '自動作成する' })) return;
-  const short = autoGenerate();
+  const { hours, roles } = autoGenerate();
   switchTab('home');
-  if (short.length) ui.toast(`作成しました。${short.map(fmt).join('、')} は最低人数に届いていません。`, 'warn');
+  const notes = [];
+  if (hours.length) notes.push(`${hours.map(fmt).join('、')} は最低人数に届いていません。`);
+  roles.forEach(([n, c]) => notes.push(`役割「${n}」は${c}時間帯で最低人数に届いていません。`));
+  if (notes.length) ui.toast('作成しました。' + notes.join(''), 'warn');
   else ui.toast('スケジュールを作成しました。必要なマスを調整してください');
 }
 $('#btnAuto').addEventListener('click', runAuto);
