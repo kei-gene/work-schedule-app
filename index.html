@@ -39,7 +39,7 @@
   <section id="setup" class="panel">
     <div class="cols">
       <div class="card">
-        <h2 id="formTitle">スタッフを登録</h2>
+        <div class="card-head"><h2 id="formTitle">スタッフを登録</h2><button type="button" class="btn small" id="btnBulk">一括登録</button></div>
         <form id="staffForm" autocomplete="off" novalidate>
           <label>名前<input type="text" id="fName"></label>
           <label>役割<select id="fRole"></select></label>
@@ -70,10 +70,7 @@
 
       <div class="card">
         <h2>自動作成の条件</h2>
-        <div class="row2">
-          <label>開始時刻<select id="cOpen"></select></label>
-          <label>終了時刻<select id="cClose"></select></label>
-        </div>
+        <p class="meta">表に表示する時間（開始・終了）は、設定タブの「表の表示時間」で変えられます。</p>
         <div class="bulk">
           <b>一括設定</b>
           <div class="bulk-row">
@@ -94,6 +91,7 @@
         </table>
         <p class="meta">最高人数を空欄にすると上限なしです。役割は設定タブで追加・編集できます。</p>
         <div class="actions"><button id="btnAuto" class="btn primary big">自動作成</button></div>
+        <p id="ruleNote" class="meta"></p>
       </div>
     </div>
   </section>
@@ -122,6 +120,31 @@
         </form>
         <ul id="roleList" class="staff-list"></ul>
       </div>
+      <div class="card">
+        <h2>表の表示時間</h2>
+        <div class="stepper-row"><span>開始時刻</span>
+          <button type="button" class="btn small" data-step="open:-1" aria-label="開始を1時間早める">−</button><b id="vOpen"></b>
+          <button type="button" class="btn small" data-step="open:1" aria-label="開始を1時間遅らせる">＋</button></div>
+        <div class="stepper-row"><span>終了時刻</span>
+          <button type="button" class="btn small" data-step="close:-1" aria-label="終了を1時間早める">−</button><b id="vClose"></b>
+          <button type="button" class="btn small" data-step="close:1" aria-label="終了を1時間遅らせる">＋</button></div>
+        <p id="rangeNote" class="meta"></p>
+        <p class="meta">例：25:00の列まで表示したいときは、終了を26:00にします。人数の設定や自動作成も、この範囲が対象です。</p>
+      </div>
+      <div class="card">
+        <h2>自動作成のルール</h2>
+        <label>ルールのタイプ<select id="aPreset"></select></label>
+        <p id="aDesc" class="meta"></p>
+        <div class="row2">
+          <label>評価の重視度<select id="aRating"></select></label>
+          <label>連続勤務の重視度<select id="aContig"></select></label>
+          <label>人件費の重視度（安い人を優先）<select id="aWage"></select></label>
+          <label>勤務時間の公平さ<select id="aFair"></select></label>
+        </div>
+        <label>余裕のある時間帯の人数<select id="aFill"></select></label>
+        <label>希望勤務時間の扱い<select id="aTarget"></select></label>
+        <label>予備の出退勤時間<select id="aSub"></select></label>
+      </div>
     </div>
   </section>
 </main>
@@ -134,6 +157,23 @@
       <button id="modalCancel" class="btn">キャンセル</button>
       <button id="modalOk" class="btn primary">OK</button>
     </div>
+  </div>
+</div>
+
+<div id="bulkModal" class="modal" hidden>
+  <div class="dialog wide" role="dialog" aria-modal="true" aria-labelledby="bulkTitle">
+    <h2 id="bulkTitle">スタッフを一括登録</h2>
+    <p class="meta">Excel やスプレッドシートからコピーして貼り付けるか、CSV ファイルを選んでください。1行に1人で、列は次の順です。同じ名前のスタッフは上書きされます。</p>
+    <code>名前, 役割, 評価(1〜5), 希望勤務時間, 希望給料, 出勤, 退勤, 予備出勤, 予備退勤</code>
+    <p class="meta">希望給料は「1100」「$15」「15ドル」のように書けます（数字だけなら円）。時刻は「9:00」「0900」など。役割以降は空欄でも構いません。</p>
+    <textarea id="bulkText" rows="9" spellcheck="false" placeholder="田中太郎,レジ,4,6,1100,9:00,15:00,15:00,18:00"></textarea>
+    <div class="bulk-tools">
+      <input type="file" id="bulkFile" accept=".csv,.tsv,.txt">
+      <button type="button" class="btn small" id="bulkSample">入力例を入れる</button>
+      <label class="check"><input type="checkbox" id="bulkRoles" checked> 登録されていない役割を自動で追加する</label>
+    </div>
+    <p id="bulkResult" class="msg"></p>
+    <div class="actions"><button type="button" class="btn" id="bulkCancel">閉じる</button><button type="button" class="btn primary" id="bulkImport">取り込む</button></div>
   </div>
 </div>
 

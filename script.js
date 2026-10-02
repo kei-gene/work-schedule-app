@@ -4,6 +4,15 @@
 const KEY = 'shiftApp.v1';
 const DEF_ROLES = [['レジ', '#0f6e6e'], ['接客', '#3b6fb6'], ['品出し', '#b45f06'], ['調理', '#a23b5a'], ['清掃', '#5b7a2f'], ['事務', '#6b5b95']]
   .map(([name, color]) => ({ name, color }));
+/* 自動作成のルール（プリセット）。数値は 0=オフ 1=弱 2=標準 3=強 */
+const PRESETS = {
+  balance:   { label: 'バランス重視', desc: '評価・希望時間・連続勤務・人件費をまんべんなく考慮します。迷ったらこれがおすすめです。', v: { rating: 2, contig: 2, wage: 1, fair: 1, fill: 'max', target: 'fill', sub: 'fallback' } },
+  headcount: { label: '人数重視', desc: '希望勤務時間にこだわらず、各時間帯を最高人数に近づけます。繁忙期や人手不足の日向けです。', v: { rating: 1, contig: 1, wage: 0, fair: 1, fill: 'max', target: 'ignore', sub: 'always' } },
+  cost:      { label: '人件費重視', desc: '最低人数だけを満たし、時給の安いスタッフを優先します。予備の時間は使いません。', v: { rating: 1, contig: 2, wage: 3, fair: 0, fill: 'min', target: 'cap', sub: 'never' } },
+  quality:   { label: '評価重視', desc: '評価の高いスタッフを優先して配置します。忙しい時間帯の品質を上げたいときに。', v: { rating: 3, contig: 2, wage: 0, fair: 0, fill: 'mid', target: 'fill', sub: 'fallback' } },
+  fair:      { label: '公平重視', desc: 'スタッフ間の勤務時間をなるべく揃えます。希望時間を超えては入れません。', v: { rating: 1, contig: 2, wage: 1, fair: 3, fill: 'mid', target: 'cap', sub: 'fallback' } },
+  wish:      { label: '希望優先', desc: '希望勤務時間と本来の出退勤時間を最優先し、予備の時間は使いません。', v: { rating: 1, contig: 2, wage: 0, fair: 1, fill: 'max', target: 'fill', sub: 'never' } }
+};
 const $ = s => document.querySelector(s);
 
 let state = load();
@@ -14,6 +23,7 @@ function load() {
   try { s = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* 破損時は初期化 */ }
   if (!s || !Array.isArray(s.staff)) s = { staff: [], open: 9, close: 22, rules: {}, schedule: {} };
   s.roles = s.roles || DEF_ROLES;
+  s.autoRules = s.autoRules || { preset: 'balance', ...PRESETS.balance.v };
   s.roleRules = s.roleRules || {};   // { 役割名: { min, max(null=上限なし) } }
   s.settings = s.settings || { display: 'JPY', rate: 150 };
   if (s.settings.auto === undefined) s.settings.auto = true;
@@ -178,6 +188,7 @@ $('#hDir').addEventListener('click', () => {
 });
 
 /* ========== ホーム ========== */
+const NAME_W = 230, COL_W = 72;   // 表の列幅（すべての時間マスを同じ大きさに）
 let viewOrder = null; // マスの編集中に行が動かないよう、並び順は並び替え・再作成などの時だけ更新する
 function renderGantt(keep) {
   const H = hoursList(), wrap = $('#gantt');
@@ -191,12 +202,12 @@ function renderGantt(keep) {
   if (!keep || !viewOrder) viewOrder = sortedStaff().map(s => s.id);
   const rows = viewOrder.map(id => state.staff.find(s => s.id === id)).filter(Boolean)
     .concat(state.staff.filter(s => !viewOrder.includes(s.id)));
-  let html = '<table class="gantt"><thead><tr><th class="name">スタッフ</th>' + H.map(h => `<th>${fmt(h)}</th>`).join('') + '</tr></thead><tbody>';
+  let html = '<table class="gantt" style="width:' + (NAME_W + H.length * COL_W) + 'px"><colgroup><col style="width:' + NAME_W + 'px">' + H.map(() => `<col style="width:${COL_W}px">`).join('') + '</colgroup><thead><tr><th class="name">スタッフ</th>' + H.map(h => `<th>${fmt(h)}</th>`).join('') + '</tr></thead><tbody>';
   rows.forEach(s => {
-    const mine = state.schedule[s.id] || [], m = mainHours(s), b = subHours(s), color = roleColor(s.role);
+    const mine = (state.schedule[s.id] || []).filter(h => H.includes(h)), m = mainHours(s), b = subHours(s), color = roleColor(s.role);
     const cost = hourly(s) * mine.length; total += cost;
     html += `<tr><th class="name"><b>${esc(s.name)}</b><div class="meta">${esc(s.role || '役割なし')} ／ <span class="stars">${stars(s.rating)}</span></div>
-      <div class="meta">${mine.length}時間${s.hours ? ' / 希望' + s.hours : ''}${s.wage ? ' ／ ' + money(cost) : ''}</div></th>`;
+      <div class="meta">${mine.length}${s.hours ? '/' + s.hours : ''}時間${s.wage ? '・' + money(cost) : ''}</div></th>`;
     H.forEach(h => {
       const on = mine.includes(h);
       const cls = on ? 'on' : m.includes(h) ? 'ok' : b.includes(h) ? 'sub' : 'off';
@@ -319,8 +330,6 @@ $('#staffList').addEventListener('click', async e => {
 function renderConditions() {
   const opts = (from, to, sel, label = fmt) => Array.from({ length: to - from + 1 }, (_, i) => from + i)
     .map(h => `<option value="${h}"${h === sel ? ' selected' : ''}>${label(h)}</option>`).join('');
-  $('#cOpen').innerHTML = opts(0, 27, state.open);
-  $('#cClose').innerHTML = opts(1, 28, state.close);
   $('#bFrom').innerHTML = opts(state.open, state.close - 1, state.open);
   $('#bTo').innerHTML = opts(state.open + 1, state.close, state.close);
   $('#ruleBody').innerHTML = hoursList().map(h => {
@@ -346,11 +355,6 @@ $('#roleRuleBody').addEventListener('change', e => {
   if (q.max != null && q.max < q.min) { if (k === 'min') q.max = q.min; else q.min = q.max; }
   state.roleRules[name] = q; save(); renderRoleRules(); renderGantt();
 });
-['#cOpen', '#cClose'].forEach(sel => $(sel).addEventListener('change', () => {
-  const o = +$('#cOpen').value, c = +$('#cClose').value;
-  if (c <= o) { ui.toast('終了時刻は開始時刻より後にしてください', 'err'); renderConditions(); return; }
-  state.open = o; state.close = c; save(); renderConditions(); renderGantt();
-}));
 $('#ruleBody').addEventListener('change', e => {
   const h = e.target.dataset.h; if (h == null) return;
   const r = { ...rule(h) }, k = e.target.dataset.k;
@@ -407,6 +411,50 @@ $('#sAuto').addEventListener('change', () => {
   if (state.settings.auto) fetchRate(true);
 });
 $('#sFetch').addEventListener('click', () => fetchRate(true));
+
+/* ---- 表の表示時間 ---- */
+function renderTimeRange() {
+  $('#vOpen').textContent = fmt(state.open); $('#vClose').textContent = fmt(state.close);
+  $('#rangeNote').textContent = `${fmt(state.open)}〜${fmt(state.close)} の ${state.close - state.open} 列を表示します（最後の列は ${fmt(state.close - 1)}〜${fmt(state.close)}）。`;
+}
+document.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => {
+  const [k, d] = b.dataset.step.split(':'), n = +d, before = state.open + ',' + state.close;
+  if (k === 'open') state.open = Math.min(Math.max(state.open + n, 0), state.close - 1);
+  else state.close = Math.min(Math.max(state.close + n, state.open + 1), 28);
+  if (before === state.open + ',' + state.close) return ui.toast('これ以上は変更できません（0:00〜28:00、最低1時間）', 'warn');
+  save(); renderTimeRange(); renderConditions(); renderGantt();
+}));
+
+/* ---- 自動作成のルール ---- */
+const LV = ['オフ', '弱', '標準', '強'];
+const AR_FIELDS = { rating: 'aRating', contig: 'aContig', wage: 'aWage', fair: 'aFair', fill: 'aFill', target: 'aTarget', sub: 'aSub' };
+const AR_NUM = ['rating', 'contig', 'wage', 'fair'];
+const AR_OPTS = {
+  fill: [['min', '最低人数まで（人件費を抑える）'], ['mid', '最低と最高の中間まで'], ['max', '最高人数まで']],
+  target: [['fill', '希望勤務時間まで勤務を追加する'], ['cap', '希望勤務時間を上限にする（追加はしない）'], ['ignore', '希望勤務時間を気にしない']],
+  sub: [['never', '使わない'], ['fallback', '人手が足りないときだけ使う'], ['always', '本来の時間と同等に使う']]
+};
+const ruleLabel = () => state.autoRules.preset === 'custom' ? 'カスタム' : PRESETS[state.autoRules.preset].label;
+function renderAutoRules() {
+  const R = state.autoRules;
+  $('#aPreset').innerHTML = Object.entries(PRESETS).map(([k, p]) => `<option value="${k}">${p.label}</option>`).join('') + '<option value="custom">カスタム（手動調整）</option>';
+  $('#aPreset').value = R.preset;
+  AR_NUM.forEach(k => { const el = $('#' + AR_FIELDS[k]); el.innerHTML = LV.map((l, i) => `<option value="${i}">${l}</option>`).join(''); el.value = R[k]; });
+  Object.keys(AR_OPTS).forEach(k => { const el = $('#' + AR_FIELDS[k]); el.innerHTML = AR_OPTS[k].map(([v, l]) => `<option value="${v}">${l}</option>`).join(''); el.value = R[k]; });
+  $('#aDesc').textContent = R.preset === 'custom' ? '個別の項目を調整した状態です。タイプを選ぶと、そのおすすめ設定に戻ります。' : PRESETS[R.preset].desc;
+  $('#ruleNote').textContent = `自動作成のルール：${ruleLabel()}（設定タブで変更できます）`;
+}
+$('#aPreset').addEventListener('change', () => {
+  const k = $('#aPreset').value;
+  state.autoRules = k === 'custom' ? { ...state.autoRules, preset: 'custom' } : { preset: k, ...PRESETS[k].v };
+  save(); renderAutoRules(); ui.toast(`自動作成のルールを「${ruleLabel()}」にしました`);
+});
+Object.entries(AR_FIELDS).forEach(([, id]) => $('#' + id).addEventListener('change', () => {
+  const v = {};
+  Object.keys(AR_FIELDS).forEach(f => { const x = $('#' + AR_FIELDS[f]).value; v[f] = AR_NUM.includes(f) ? +x : x; });
+  const hit = Object.keys(PRESETS).find(p => Object.keys(v).every(f => PRESETS[p].v[f] === v[f]));
+  state.autoRules = { preset: hit || 'custom', ...v }; save(); renderAutoRules();
+}));
 
 /* ---- 役割の管理（追加・編集・削除） ---- */
 let editingRole = null;
@@ -494,14 +542,21 @@ $('#roleList').addEventListener('dragend', () => { dragRole = null; roleLis().fo
 
 /* ========== 自動作成 ========== */
 function autoGenerate() {
+  const R = state.autoRules;
+  const W = { rating: [0, 1, 2, 4][R.rating], contig: [0, 1, 2, 4][R.contig], wage: [0, 0.3, 1, 2.5][R.wage], fair: [0, 0.4, 1, 2][R.fair] };
   const H = hoursList(), sch = {}, cnt = {}, roleAt = {};
   H.forEach(h => { cnt[h] = 0; roleAt[h] = {}; });
-  const P = state.staff.map(s => ({ s, main: mainHours(s), sub: subHours(s), target: s.hours || mainHours(s).length }));
+  const P = state.staff.map(s => ({
+    s, main: mainHours(s), sub: R.sub === 'never' ? [] : subHours(s),
+    target: R.target === 'ignore' ? Infinity : (s.hours || mainHours(s).length),
+    yen: (s.cur === 'USD' ? s.wage * state.settings.rate : s.wage) || 0
+  }));
   P.forEach(p => sch[p.s.id] = []);
   const rr = state.roleRules;
   const roleMax = r => (rr[r] && rr[r].max != null) ? rr[r].max : Infinity;
   const roleMin = r => (rr[r] && rr[r].min) || 0;
   const roleOK = (p, h) => !p.s.role || (roleAt[h][p.s.role] || 0) < roleMax(p.s.role);   // 役割ごとの最高人数
+  const capH = h => { const r = rule(h); return R.fill === 'min' ? r.min : R.fill === 'mid' ? Math.ceil((r.min + r.max) / 2) : r.max; };
   const assign = (p, h) => { sch[p.s.id].push(h); cnt[h]++; roleAt[h][p.s.role] = (roleAt[h][p.s.role] || 0) + 1; };
   const score = (p, h) => {
     const mine = sch[p.s.id];
@@ -509,38 +564,48 @@ function autoGenerate() {
     const inMain = p.main.includes(h);
     if (!inMain && !p.sub.includes(h)) return -Infinity;
     if (!roleOK(p, h)) return -Infinity;
-    return p.s.rating * 2 + (inMain ? 3 : 0)
-      + (mine.includes(h - 1) || mine.includes(h + 1) ? 2 : 0)
-      + (p.target - mine.length) * 0.5
-      + (p.s.role && !roleAt[h][p.s.role] ? 1.5 : 0)
-      - hourly(p.s) * (state.settings.display === 'USD' ? 0.04 : 0.0003); // 時給はわずかに考慮
+    return p.s.rating * W.rating                                  // 評価
+      + (inMain && R.sub !== 'always' ? 3 : 0)                    // 本来の出退勤時間を優先
+      + (mine.includes(h - 1) || mine.includes(h + 1) ? W.contig : 0) // 連続勤務
+      + (isFinite(p.target) ? (p.target - mine.length) * 0.5 : 0) // 希望時間に足りない人を優先
+      + (p.s.role && !roleAt[h][p.s.role] ? 1.5 : 0)              // 役割の偏りを避ける
+      - (p.yen / 1000) * W.wage                                   // 人件費
+      - mine.length * W.fair;                                     // 勤務時間の公平さ
+  };
+  const best = (h, only) => {
+    let b = null, bs = -Infinity;
+    P.forEach(p => { if (only && p.s.role !== only) return; const v = score(p, h); if (v > bs) { bs = v; b = p; } });
+    return b;
   };
   const avail = h => P.filter(p => score(p, h) > -Infinity).length;
+
+  // 1) 候補が少ない時間帯から、役割ごとの最低人数 → 全体の最低人数を満たす
   [...H].sort((a, b) => avail(a) - avail(b)).forEach(h => {
-    // 役割ごとの最低人数を先に満たす（全体の最高人数は超えない）
     state.roles.forEach(ro => {
       while ((roleAt[h][ro.name] || 0) < roleMin(ro.name) && cnt[h] < rule(h).max) {
-        let best = null, bs = -Infinity;
-        P.forEach(p => { if (p.s.role !== ro.name) return; const v = score(p, h); if (v > bs) { bs = v; best = p; } });
-        if (!best) break;
-        assign(best, h);
+        const p = best(h, ro.name); if (!p) break; assign(p, h);
       }
     });
-    while (cnt[h] < rule(h).min) {
-      let best = null, bs = -Infinity;
-      P.forEach(p => { const v = score(p, h); if (v > bs) { bs = v; best = p; } });
-      if (!best) break;
-      assign(best, h);
-    }
+    while (cnt[h] < rule(h).min) { const p = best(h); if (!p) break; assign(p, h); }
   });
-  [...P].sort((a, b) => b.s.rating - a.s.rating).forEach(p => {
-    while (sch[p.s.id].length < p.target) {
-      const cand = p.main.filter(h => H.includes(h) && !sch[p.s.id].includes(h) && cnt[h] < rule(h).max && roleOK(p, h));
-      if (!cand.length) break;
-      cand.sort((a, b) => (cnt[a] - rule(a).min) - (cnt[b] - rule(b).min) || score(p, b) - score(p, a));
-      assign(p, cand[0]);
-    }
+
+  // 2) 希望勤務時間まで勤務を追加（「希望勤務時間まで追加する」のとき）
+  if (R.target === 'fill') {
+    [...P].sort((a, b) => W.rating ? b.s.rating - a.s.rating : 0).forEach(p => {
+      while (sch[p.s.id].length < p.target) {
+        const cand = p.main.filter(h => H.includes(h) && !sch[p.s.id].includes(h) && cnt[h] < capH(h) && roleOK(p, h));
+        if (!cand.length) break;
+        cand.sort((a, b) => (cnt[a] - rule(a).min) - (cnt[b] - rule(b).min) || score(p, b) - score(p, a));
+        assign(p, cand[0]);
+      }
+    });
+  }
+
+  // 3) 各時間帯を「余裕のある時間帯の人数」まで補う
+  [...H].sort((a, b) => cnt[a] - cnt[b]).forEach(h => {
+    while (cnt[h] < capH(h)) { const p = best(h); if (!p) break; assign(p, h); }
   });
+
   state.schedule = sch; save();
   const roles = state.roles.map(r => [r.name, H.filter(h => (roleAt[h][r.name] || 0) < roleMin(r.name)).length]).filter(x => x[1] > 0);
   return { hours: H.filter(h => cnt[h] < rule(h).min), roles };
@@ -555,11 +620,78 @@ async function runAuto() {
   if (hours.length) notes.push(`${hours.map(fmt).join('、')} は最低人数に届いていません。`);
   roles.forEach(([n, c]) => notes.push(`役割「${n}」は${c}時間帯で最低人数に届いていません。`));
   if (notes.length) ui.toast('作成しました。' + notes.join(''), 'warn');
-  else ui.toast('スケジュールを作成しました。必要なマスを調整してください');
+  else ui.toast(`スケジュールを作成しました（${ruleLabel()}）。必要なマスを調整してください`);
 }
 $('#btnAuto').addEventListener('click', runAuto);
 $('#btnAutoHome').addEventListener('click', runAuto);
 
+/* ========== スタッフ一括登録 ========== */
+const ROLE_PALETTE = ['#0f6e6e', '#3b6fb6', '#b45f06', '#a23b5a', '#5b7a2f', '#6b5b95', '#8a6d1d', '#2f7d9a'];
+const BULK_SAMPLE = '田中太郎,レジ,4,6,1100,9:00,15:00,15:00,18:00\nSarah Lee,接客,5,5,$15,12:00,18:00,,\n佐藤花子,調理,3,8,1200,10:00,18:00,,';
+
+/* 1行1人。タブ区切り（表計算ソフトからの貼り付け）またはカンマ区切り */
+function parseBulk(text, addRoles) {
+  const rows = [], errs = [];
+  text.split(/\r?\n/).forEach((line, i) => {
+    if (!line.trim()) return;
+    const c = (line.includes('\t') ? line.split('\t') : line.split(/[,，、]/)).map(x => x.trim().replace(/^"(.*)"$/, '$1'));
+    if (['名前', '氏名', 'name'].includes(c[0].toLowerCase())) return;   // 見出し行は読み飛ばす
+    const [name, role = '', rt = '', hr = '', wg = '', st = '', en = '', st2 = '', en2 = ''] = c;
+    const bad = [];
+    if (!name) bad.push('名前がありません');
+    let rating = 3;
+    if (rt) rating = /^[1-5]$/.test(rt) ? +rt : (/^★{1,5}$/.test(rt) ? rt.length : 0);
+    if (!rating) bad.push('評価は1〜5で入力してください');
+    const hours = hr ? +hr.replace(/時間|h/gi, '') : 0;
+    if (!(hours >= 0 && hours <= 24)) bad.push('希望勤務時間は0〜24で入力してください');
+    const wage = wg ? +wg.replace(/[^\d.]/g, '') : 0;
+    if (!(wage >= 0)) bad.push('希望給料は数字で入力してください');
+    const cur = /\$|ドル|usd|dollar/i.test(wg) ? 'USD' : 'JPY';
+    const [a, b, a2, b2] = [st, en, st2, en2].map(parseT);
+    if ([a, b, a2, b2].includes(null)) bad.push('時刻の形式が正しくありません');
+    else {
+      if (!a || !b) bad.push('出勤・退勤時間が必要です');
+      else if (toH(b, true) <= toH(a)) bad.push('退勤は出勤より後にしてください');
+      if (!a2 !== !b2) bad.push('予備の出勤・退勤は両方入力してください');
+      else if (a2 && toH(b2, true) <= toH(a2)) bad.push('予備の退勤は予備の出勤より後にしてください');
+    }
+    if (role && !addRoles && !state.roles.some(r => r.name === role)) bad.push(`役割「${role}」は登録されていません`);
+    if (bad.length) errs.push(`${i + 1}行目：${bad.join('、')}`);
+    else rows.push({ name, role, rating, hours, wage, cur, start: a, end: b, start2: a2, end2: b2 });
+  });
+  return { rows, errs };
+}
+
+const bulkEl = $('#bulkModal');
+const closeBulk = () => { bulkEl.hidden = true; };
+$('#btnBulk').addEventListener('click', () => { $('#bulkResult').textContent = ''; bulkEl.hidden = false; $('#bulkText').focus(); });
+$('#bulkCancel').addEventListener('click', closeBulk);
+bulkEl.addEventListener('click', e => { if (e.target === bulkEl) closeBulk(); });
+bulkEl.addEventListener('keydown', e => { if (e.key === 'Escape') closeBulk(); });
+$('#bulkSample').addEventListener('click', () => { $('#bulkText').value = BULK_SAMPLE; $('#bulkResult').textContent = ''; });
+$('#bulkFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const buf = await f.arrayBuffer();
+  let t;
+  try { t = new TextDecoder('utf-8', { fatal: true }).decode(buf); }      // Excel 保存の CSV は Shift_JIS のことがある
+  catch (_) { t = new TextDecoder('shift_jis').decode(buf); }
+  $('#bulkText').value = t.replace(/^\uFEFF/, ''); $('#bulkResult').textContent = ''; e.target.value = '';
+});
+$('#bulkImport').addEventListener('click', () => {
+  const { rows, errs } = parseBulk($('#bulkText').value, $('#bulkRoles').checked), el = $('#bulkResult');
+  el.className = 'msg warn';
+  if (errs.length) { el.textContent = errs.slice(0, 8).join('\n') + (errs.length > 8 ? `\n…ほか${errs.length - 8}件` : '') + '\n（直してからもう一度「取り込む」を押してください）'; return; }
+  if (!rows.length) { el.textContent = '取り込む行がありません。'; return; }
+  let add = 0, upd = 0;
+  rows.forEach(d => {
+    if (d.role && !state.roles.some(r => r.name === d.role)) state.roles.push({ name: d.role, color: ROLE_PALETTE[state.roles.length % ROLE_PALETTE.length] });
+    const ex = state.staff.find(s => s.name === d.name);
+    if (ex) { Object.assign(ex, d); upd++; } else { state.staff.push({ id: 's' + Date.now() + '_' + add, ...d }); add++; }
+  });
+  save(); renderRoles(); renderGantt(); closeBulk();
+  ui.toast(`一括登録しました（追加${add}人${upd ? `・上書き${upd}人` : ''}）`);
+});
+
 /* ========== 初期化 ========== */
-resetForm(); renderRoles(); renderConditions(); renderSettings(); renderSortBar(); renderGantt();
+resetForm(); renderRoles(); renderConditions(); renderSettings(); renderTimeRange(); renderAutoRules(); renderSortBar(); renderGantt();
 if (state.settings.auto) fetchRate(false);   // ページを開くたびに最新レートを取得

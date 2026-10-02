@@ -33,20 +33,20 @@ main{padding:20px 28px 40px}
 
 /* ガント */
 .gantt-wrap{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:auto}
-table.gantt{border-collapse:collapse;width:100%;min-width:1000px}
+table.gantt{border-collapse:collapse;table-layout:fixed}
 .gantt th,.gantt td{border:1px solid var(--line);text-align:center}
 .gantt thead th{background:#f5f7f9;padding:8px 0;font-weight:600;position:sticky;top:0;z-index:2}
-.gantt th.name{width:200px;text-align:left;padding:8px 12px;background:#fafbfc;position:sticky;left:0;z-index:1}
+.gantt th.name{text-align:left;padding:6px 12px;background:#fafbfc;position:sticky;left:0;z-index:1;overflow:hidden}
 .gantt thead th.name{z-index:3;background:#f5f7f9}
-.name b{display:block;font-size:14px}
-.name .meta{color:var(--sub);font-size:12px;margin-top:2px;font-weight:400}
-.cell{height:48px;cursor:pointer;transition:background .1s}
+.name b{display:block;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.name .meta{color:var(--sub);font-size:12px;margin-top:2px;font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cell{height:72px;cursor:pointer;transition:background .1s}
 .cell.ok{background:#f3faf9}                 /* 出勤可能時間 */
 .cell.off{background:repeating-linear-gradient(135deg,#f0f2f4 0 6px,#e8ebee 6px 12px);cursor:not-allowed}
 .cell.sub{background:#fbf6ea}               /* 予備時間 */
 .cell:not(.off):hover{outline:2px solid var(--accent);outline-offset:-2px}
 .cell.on{color:#fff;font-weight:700}
-.gantt tfoot td,.gantt tfoot th{background:#f5f7f9;padding:7px 0;font-weight:700}
+.gantt tfoot td,.gantt tfoot th{background:#f5f7f9;padding:4px 0;height:48px;font-weight:700}
 .gantt tfoot .low{background:#fde8e1;color:var(--warn)}
 .gantt tfoot .high{background:#fbf0d3;color:var(--over)}
 .gantt tfoot small{display:block;font-weight:400;color:var(--sub);font-size:11px}
@@ -142,3 +142,20 @@ input:focus,select:focus{border-color:var(--accent);outline:none;box-shadow:0 0 
 
 .rr-title{font-size:14px;margin:22px 0 4px}
 .rules .badge{margin:0}
+
+.gantt thead th{height:40px}
+.card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.card-head h2{margin:0}
+.stepper-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.stepper-row span{width:72px;color:var(--sub);font-size:12px}
+.stepper-row b{width:64px;text-align:center;font-size:16px}
+.dialog{max-height:90vh;overflow:auto}
+.dialog.wide{width:min(720px,94vw)}
+.dialog h2{margin:0 0 8px;font-size:17px}
+.dialog code{display:block;background:#f5f7f9;border:1px solid var(--line);border-radius:4px;padding:6px 10px;margin:8px 0;font-size:12px;overflow-x:auto}
+.dialog .meta{margin:6px 0;color:var(--sub);font-size:12px;line-height:1.6}
+.dialog textarea{width:100%;font:13px/1.6 ui-monospace,"BIZ UDGothic",monospace;border:1px solid var(--line);border-radius:var(--radius);padding:10px;resize:vertical}
+.bulk-tools{display:flex;align-items:center;gap:12px;margin:10px 0;flex-wrap:wrap}
+.bulk-tools input[type=file]{width:auto;margin:0;padding:4px;font-size:12px}
+.bulk-tools label{margin:0}
+.msg{white-space:pre-line}
