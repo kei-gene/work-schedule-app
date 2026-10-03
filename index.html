@@ -10,10 +10,10 @@
 <header class="top">
   <h1>シフト・作業スケジュール</h1>
   <nav class="tabs">
-    <button class="tab active" data-tab="home">ホーム</button>
-    <button class="tab" data-tab="shift">シフト管理</button>
-    <button class="tab" data-tab="setup">作業スケジュール作成</button>
-    <button class="tab" data-tab="settings">設定</button>
+    <button class="tab active" data-tab="home"><span class="lg">ホーム</span><span class="sh">ホーム</span></button>
+    <button class="tab" data-tab="shift"><span class="lg">シフト管理</span><span class="sh">シフト</span></button>
+    <button class="tab" data-tab="setup"><span class="lg">作業スケジュール作成</span><span class="sh">作成</span></button>
+    <button class="tab" data-tab="settings"><span class="lg">設定</span><span class="sh">設定</span></button>
   </nav>
   <!-- 仮の切り替え（従業員用画面ができたら、この .mode ブロックごと削除できます） -->
   <div class="mode" data-temp>
@@ -21,6 +21,7 @@
     <div class="mgroup">
       <button type="button" class="mbtn active" data-mode="admin">管理者</button>
       <button type="button" class="mbtn" data-mode="employee">従業員</button>
+      <button type="button" class="mbtn" data-mode="dev">開発者</button>
     </div>
   </div>
 </header>
@@ -62,9 +63,22 @@
         <button type="button" class="btn primary" id="wPublish">確定する</button>
       </div>
     </div>
+    <div class="dlbar">
+      <label class="inline">提出締切<input type="date" id="wDeadline" aria-label="希望シフトの提出締切"></label>
+      <button type="button" class="btn small" id="wDlClear">解除</button>
+      <span id="wDlInfo" class="pill"></span>
+    </div>
     <p class="hint">従業員が提出した希望が表に出ます（<b>休</b>＝希望休、<b>○</b>＝出勤可能、時間＝その時間だけ可能）。マスをクリックしてシフトを入れます。希望休の日に入れるときは確認が出ます。期間の長さは設定タブで変えられます。</p>
+    <div class="legend-shift">
+      <span><i class="lg pf-off"></i>希望休（本人の希望）</span>
+      <span><i class="lg rest"></i>休み（こちらで指定）</span>
+      <span><i class="lg pf-ok"></i>○ 未決定（出勤可能）</span>
+      <span><i class="lg pf-time"></i>時間指定（その時間だけ可能）</span>
+      <span><i class="lg work"></i>シフト（役割の色）</span>
+    </div>
     <p id="wTotal" class="total"></p>
     <div id="wGrid" class="gantt-wrap"></div>
+    <div id="wMobile" class="mshift" hidden></div>
     <div id="wReq" class="card reqpanel"></div>
   </section>
 
@@ -88,6 +102,7 @@
               <strong id="eLabel"></strong>
             </div>
           </div>
+          <div id="eDeadline" class="dlbanner"></div>
           <p class="hint">はじめは全日「出勤可能」です。下の項目を選んで日付をタップすると指定できます。同じ内容をもう一度タップすると指定が消えます。</p>
           <div class="brushbar">
             <button type="button" class="brush" data-brush="off">希望休</button>
@@ -98,7 +113,7 @@
           </div>
           <div id="eCal" class="cal"></div>
           <div class="card submitbox">
-            <label>管理者へのコメント（任意）<textarea id="eComment" rows="3" maxlength="500" placeholder="例：第2週は試験があるので、早めの時間だけ入れると助かります"></textarea></label>
+            <label>管理者へのコメント（任意）<textarea id="eComment" rows="4" placeholder="例：第2週は試験があるので、早めの時間だけ入れると助かります"></textarea></label>
             <div class="actions"><button type="button" class="btn primary" id="eSubmit">提出する</button><span id="eSubStatus" class="substatus"></span></div>
           </div>
         </div>
@@ -116,6 +131,47 @@
       </div>
     </div>
   </section>
+
+  <!-- 開発者モード（仮）：ヘッダーの「開発者」ボタンと、このセクション、script.js の「開発者モード」の項をまとめて外せます -->
+  <section id="dev" class="panel">
+    <div class="emp">
+      <p class="hint">開発・動作確認用のモードです。登録したデータは、管理者・従業員の画面でそのまま使えます。</p>
+      <p id="dInfo" class="total"></p>
+
+      <div class="card">
+        <h2>ランダムでスタッフを登録</h2>
+        <p class="meta">名前・役割・評価・希望勤務時間・時給（円／ドル）・出退勤時間・予備の時間を、すべてランダムに作ります。役割は、今ある役割から選ばれます。出退勤時間は、設定タブの表示時間の範囲に収まります。</p>
+        <div class="row2">
+          <label>人数（1〜50）<input type="number" id="dCount" min="1" max="50" value="8"></label>
+          <label>登録のしかた
+            <select id="dMode"><option value="add">今のスタッフに追加する</option><option value="replace">今のスタッフをすべて入れ替える</option></select>
+          </label>
+        </div>
+        <div class="actions"><button type="button" class="btn primary" id="dRandomStaff">ランダムで登録する</button></div>
+      </div>
+
+      <div class="card">
+        <h2>ランダムな希望シフトを作る</h2>
+        <p class="meta">登録済みの全員について、今の期間の「希望休」「時間指定」「毎週のルール」「コメント」をランダムに作り、一部の人は提出済みにします。今ある希望と提出は上書きされます。</p>
+        <div class="actions"><button type="button" class="btn" id="dRandomPrefs">希望シフトをランダムに作る</button></div>
+      </div>
+
+      <div class="card">
+        <h2>画面の表示（確認用）</h2>
+        <label>レイアウト
+          <select id="dLayout"><option value="auto">自動（画面の大きさ・向きで判定）</option><option value="desktop">PC・タブレット横向き</option><option value="mobile">スマホ・タブレット縦向き</option></select>
+        </label>
+        <p class="meta">ふだんは「自動」のままで使えます。パソコンの画面でスマホ版の見た目を確かめたいときに切り替えます。</p>
+      </div>
+
+      <div class="card">
+        <h2>データの初期化</h2>
+        <p class="meta">スタッフ、シフト、希望、設定など、このアプリがブラウザに保存しているデータをすべて消して、最初の状態に戻します。</p>
+        <div class="actions"><button type="button" class="btn danger" id="dReset">すべてのデータを消す</button></div>
+      </div>
+    </div>
+  </section>
+
 
   <section id="setup" class="panel">
     <div class="cols">
@@ -225,6 +281,7 @@
         <label>余裕のある時間帯の人数<select id="aFill"></select></label>
         <label>希望勤務時間の扱い<select id="aTarget"></select></label>
         <label>予備の出退勤時間<select id="aSub"></select></label>
+        <label>人手が足りないときの対応<select id="aFix"></select></label>
       </div>
       <div class="card">
         <h2>シフトの注意ライン</h2>
@@ -247,6 +304,7 @@
           <label>1期間の週数<select id="pWeeks"><option value="1">1週間</option><option value="2">2週間</option><option value="3">3週間</option><option value="4">4週間</option><option value="5">5週間</option><option value="6">6週間</option></select></label>
           <label>最初の期間の開始日<input type="date" id="pAnchor"></label>
         </div>
+        <label>締切の初期値（期間の開始日の何日前。0なら設定しない）<input type="number" id="pDlDays" min="0" max="60" step="1"></label>
         <p id="pNote" class="meta"></p>
         <p class="meta">管理者のシフト表と、従業員の希望提出は、この期間ごとに区切られます。</p>
       </div>
@@ -284,6 +342,7 @@
     <p id="sInfo" class="meta"></p>
     <p class="meta">休憩の目安：法定の最低は、6時間を超えると45分、8時間を超えると60分です。</p>
     <div class="actions">
+      <button type="button" class="btn" id="sUnset">未設定に戻す</button>
       <button type="button" class="btn push-left" id="sDelete">休みにする</button>
       <button type="button" class="btn" id="sCancel">キャンセル</button>
       <button type="button" class="btn primary" id="sSave">保存</button>
