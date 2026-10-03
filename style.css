@@ -336,3 +336,32 @@ body[data-layout="mobile"] .toast{max-width:none}
 body[data-layout="mobile"] .legend-shift{gap:8px 12px}
 body[data-layout="mobile"] .dialog{width:min(420px,94vw)}
 body[data-layout="mobile"] .mode{width:100%;justify-content:flex-end}
+
+/* ---- ログイン・アカウント ---- */
+[hidden]{display:none!important}
+body[data-auth="out"] header.top,body[data-auth="out"] main{display:none}
+.login{position:fixed;inset:0;z-index:45;display:flex;align-items:flex-start;justify-content:center;padding:max(24px,env(safe-area-inset-top)) 16px 24px;overflow:auto;background:linear-gradient(160deg,#18323a,#0f6e6e)}
+body[data-auth="in"] .login{display:none}
+.login-card{background:#fff;border-radius:12px;padding:26px 28px 22px;width:min(460px,100%);margin:auto 0;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+.login-card h1{font-size:17px;margin:0 0 14px;color:#18323a;letter-spacing:.04em}
+.login-card h2{font-size:16px;margin:0 0 12px}
+.login-card .btn.wide{width:100%;margin-top:6px}
+.login-card .meta{margin:10px 0 0;color:var(--sub);font-size:12px;line-height:1.6}
+.login-card a{color:var(--accent-d)}
+.pwrow{display:flex;gap:6px;margin-top:4px}
+.pwrow input{margin:0}
+.help{margin-top:8px;padding:10px 12px;background:#f5f7f9;border-radius:var(--radius);font-size:12px;line-height:1.7}
+.help p{margin:0 0 8px}
+.su-group{padding:10px 12px 0;margin-bottom:12px;border:1px solid var(--line);border-radius:var(--radius)}
+.su-group>b{display:block;margin-bottom:6px}
+.user{display:flex;align-items:center;gap:8px;margin-left:12px;color:#cfe0e2;font-size:12px}
+.mode[hidden]+.user{margin-left:auto}
+.btn.ghost{background:transparent;border-color:#4b6a72;color:#cfe0e2}
+.btn.ghost:hover{border-color:#fff;color:#fff}
+#cText{width:100%;font:13px/1.6 ui-monospace,"BIZ UDGothic",monospace;border:1px solid var(--line);border-radius:var(--radius);padding:10px;resize:vertical}
+.staff-list .pill{margin-left:4px}
+.pill.warn{background:#fde8e1;color:#b3261e}
+body[data-layout="mobile"] .login{padding-top:max(16px,env(safe-area-inset-top))}
+body[data-layout="mobile"] .login-card{padding:20px 18px}
+body[data-layout="mobile"] .user{margin-left:auto;gap:6px}
+body[data-layout="mobile"] .user #uName{max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

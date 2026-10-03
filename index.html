@@ -2,11 +2,11 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>シフト・作業スケジュール</title>
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body data-auth="out">
 <header class="top">
   <h1>シフト・作業スケジュール</h1>
   <nav class="tabs">
@@ -15,7 +15,7 @@
     <button class="tab" data-tab="setup"><span class="lg">作業スケジュール作成</span><span class="sh">作成</span></button>
     <button class="tab" data-tab="settings"><span class="lg">設定</span><span class="sh">設定</span></button>
   </nav>
-  <!-- 仮の切り替え（従業員用画面ができたら、この .mode ブロックごと削除できます） -->
+  <!-- 画面の切り替え（開発者のログイン時だけ表示されます） -->
   <div class="mode" data-temp>
     <span class="temp">仮</span><span>表示切替</span>
     <div class="mgroup">
@@ -23,6 +23,11 @@
       <button type="button" class="mbtn" data-mode="employee">従業員</button>
       <button type="button" class="mbtn" data-mode="dev">開発者</button>
     </div>
+  </div>
+  <div class="user">
+    <span id="uName"></span>
+    <button type="button" class="btn small ghost" id="uPw">パスワード変更</button>
+    <button type="button" class="btn small ghost" id="uOut">ログアウト</button>
   </div>
 </header>
 
@@ -147,6 +152,7 @@
             <select id="dMode"><option value="add">今のスタッフに追加する</option><option value="replace">今のスタッフをすべて入れ替える</option></select>
           </label>
         </div>
+        <label class="check"><input type="checkbox" id="dAcct"> 従業員のログインアカウントも発行する（初期パスワードを表示します）</label>
         <div class="actions"><button type="button" class="btn primary" id="dRandomStaff">ランダムで登録する</button></div>
       </div>
 
@@ -165,8 +171,23 @@
       </div>
 
       <div class="card">
+        <h2>管理者・開発者アカウント</h2>
+        <form id="adForm" autocomplete="off">
+          <div class="row2">
+            <label>種類<select id="adRole"><option value="admin">管理者</option><option value="dev">開発者</option></select></label>
+            <label>ID（英数字3〜20文字）<input id="adId" type="text" autocapitalize="off" spellcheck="false"></label>
+            <label>表示名<input id="adName" type="text"></label>
+            <label>パスワード（空欄なら自動で作ります）<input id="adPw" type="text" autocomplete="off" spellcheck="false"></label>
+          </div>
+          <div class="actions"><button type="submit" class="btn primary">アカウントを追加</button></div>
+        </form>
+        <ul id="adList" class="staff-list"></ul>
+        <p class="meta">自分自身と、最後の開発者は、削除も無効化もできません。</p>
+      </div>
+
+      <div class="card">
         <h2>データの初期化</h2>
-        <p class="meta">スタッフ、シフト、希望、設定など、このアプリがブラウザに保存しているデータをすべて消して、最初の状態に戻します。</p>
+        <p class="meta">スタッフ、シフト、希望、アカウント、設定など、このアプリがブラウザに保存しているデータをすべて消して、最初の状態に戻します。</p>
         <div class="actions"><button type="button" class="btn danger" id="dReset">すべてのデータを消す</button></div>
       </div>
     </div>
@@ -308,6 +329,12 @@
         <p id="pNote" class="meta"></p>
         <p class="meta">管理者のシフト表と、従業員の希望提出は、この期間ごとに区切られます。</p>
       </div>
+      <div class="card" id="acCard">
+        <h2>従業員アカウント</h2>
+        <p class="meta">従業員がログインするためのIDとパスワードを発行します。初期パスワードは、発行したその画面でしか確認できません。従業員は、最初のログインで自分のパスワードに変更します。</p>
+        <div class="actions"><button type="button" class="btn primary" id="acAll">未発行の全員に発行</button></div>
+        <ul id="acList" class="staff-list"></ul>
+      </div>
     </div>
   </section>
 </main>
@@ -364,6 +391,75 @@
     </div>
     <p id="bulkResult" class="msg"></p>
     <div class="actions"><button type="button" class="btn" id="bulkCancel">閉じる</button><button type="button" class="btn primary" id="bulkImport">取り込む</button></div>
+  </div>
+</div>
+
+<div id="login" class="login">
+  <div class="login-card">
+    <h1>シフト・作業スケジュール</h1>
+
+    <form id="lgForm" autocomplete="on">
+      <h2>ログイン</h2>
+      <label>ID<input id="lgId" type="text" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+      <label>パスワード
+        <div class="pwrow"><input id="lgPw" type="password" autocomplete="current-password"><button type="button" class="btn small" id="lgShow">表示</button></div>
+      </label>
+      <label class="check"><input type="checkbox" id="lgRemember"> ログイン状態を保持する（この端末）</label>
+      <p id="lgMsg" class="msg warn"></p>
+      <button type="submit" class="btn primary big wide">ログイン</button>
+      <p class="meta"><a href="#" id="lgForgot">ログインできないとき</a></p>
+      <div id="lgHelp" class="help" hidden>
+        <p><b>従業員</b>：管理者に連絡してください。管理者が「設定」の「従業員アカウント」でパスワードを再発行します。</p>
+        <p><b>管理者</b>：開発者に連絡してください。開発者が「管理者・開発者アカウント」でパスワードを再発行します。</p>
+        <p><b>開発者</b>：最初に表示された「復旧コード」で、パスワードを再設定できます。<br><button type="button" class="btn small" id="lgRecover">復旧コードで再設定する</button></p>
+      </div>
+    </form>
+
+    <form id="suForm" autocomplete="off" hidden>
+      <h2>はじめの設定</h2>
+      <p class="meta">最初に、管理者と開発者のアカウントを作ります。管理者は日々のシフト作成、開発者は動作確認やアカウントの管理に使います。</p>
+      <div class="su-group"><b>管理者</b>
+        <div class="row2"><label>ID<input id="suAId" type="text" value="admin" autocapitalize="off" spellcheck="false"></label><label>表示名<input id="suAName" type="text" value="管理者"></label></div>
+        <div class="row2"><label>パスワード（6文字以上）<input id="suAPw" type="password" autocomplete="new-password"></label><label>パスワード（確認）<input id="suAPw2" type="password" autocomplete="new-password"></label></div>
+      </div>
+      <div class="su-group"><b>開発者</b>
+        <div class="row2"><label>ID<input id="suDId" type="text" value="dev" autocapitalize="off" spellcheck="false"></label><label>表示名<input id="suDName" type="text" value="開発者"></label></div>
+        <div class="row2"><label>パスワード（6文字以上）<input id="suDPw" type="password" autocomplete="new-password"></label><label>パスワード（確認）<input id="suDPw2" type="password" autocomplete="new-password"></label></div>
+      </div>
+      <p class="meta">このログインは、この端末のブラウザの中だけで動きます。ほかの人から見えないようにする本格的な保護には、サーバーが必要です。</p>
+      <p id="suMsg" class="msg warn"></p>
+      <button type="submit" class="btn primary big wide">アカウントを作る</button>
+    </form>
+
+    <form id="rcForm" autocomplete="off" hidden>
+      <h2>開発者のパスワードを再設定</h2>
+      <label>開発者のID<input id="rcId" type="text" autocapitalize="off" spellcheck="false"></label>
+      <label>復旧コード<input id="rcCode" type="text" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX"></label>
+      <div class="row2"><label>新しいパスワード（6文字以上）<input id="rcPw" type="password" autocomplete="new-password"></label><label>新しいパスワード（確認）<input id="rcPw2" type="password" autocomplete="new-password"></label></div>
+      <p id="rcMsg" class="msg warn"></p>
+      <div class="actions"><button type="button" class="btn" id="rcBack">戻る</button><button type="submit" class="btn primary">再設定する</button></div>
+    </form>
+  </div>
+</div>
+
+<div id="pwModal" class="modal" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
+    <h2 id="pwTitle">パスワードの変更</h2>
+    <p id="pwNote" class="meta"></p>
+    <label>今のパスワード<input id="pwOld" type="password" autocomplete="current-password"></label>
+    <label>新しいパスワード（6文字以上）<input id="pwNew" type="password" autocomplete="new-password"></label>
+    <label>新しいパスワード（確認）<input id="pwNew2" type="password" autocomplete="new-password"></label>
+    <p id="pwMsg" class="msg warn"></p>
+    <div class="actions"><button type="button" class="btn" id="pwCancel">キャンセル</button><button type="button" class="btn primary" id="pwSave">変更する</button></div>
+  </div>
+</div>
+
+<div id="credModal" class="modal" hidden>
+  <div class="dialog wide" role="dialog" aria-modal="true" aria-labelledby="cTitle">
+    <h2 id="cTitle"></h2>
+    <p id="cNote" class="meta"></p>
+    <textarea id="cText" rows="6" readonly spellcheck="false"></textarea>
+    <div class="actions"><button type="button" class="btn" id="cCopy">コピー</button><button type="button" class="btn primary" id="cClose">控えたので閉じる</button></div>
   </div>
 </div>
 
