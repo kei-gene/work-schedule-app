@@ -421,3 +421,8 @@ body[data-layout="mobile"] .hhead{gap:8px}
 body[data-layout="mobile"] .daynav strong{min-width:7.5em;font-size:14px}
 body[data-layout="mobile"] .setcats{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;margin-left:-2px}
 body[data-layout="mobile"] .scbtn{flex:none;padding:9px 14px}
+
+.shiftgrid.ro .scell{cursor:default}
+.shiftgrid.ro .scell:hover{filter:none;outline:none;background-clip:padding-box}
+.shiftgrid.ro .scell.empty:hover{background:inherit;color:inherit}
+.hhead .daynav strong#hsLabel{min-width:16em}

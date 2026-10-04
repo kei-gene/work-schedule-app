@@ -233,35 +233,19 @@ const deriveWork = date => { const o = {}; Object.entries(dayShifts(date)).forEa
 const workOf = date => state.work[date] || deriveWork(date);
 const ensureWork = date => (state.work[date] = state.work[date] || deriveWork(date));
 
+let _hsP = null;   // ホームのシフト表で表示中の期間（はじめは今日を含む期間＝1か月分）
+const HSP = () => _hsP || (_hsP = periodOf(new Date()));
 function renderHomeShift() {
-  const k = HS(), H = hoursList(), wrap = $('#hShift'), note = $('#hsNote'), pk = pkOf(k), [lo, hi] = homeRange(), D = dim();
-  const keysP = pKeys(periodOf(parseYmd(k))), active = keysP.some(hasShifts), st = dayStat(k), lack = active && st.lack;
-  $('#hsLabel').textContent = dayLabel(k) + (lack ? ' ⚠' : ''); $('#hsLabel').className = lack ? 'lack' : '';
-  $('#hsPrev').disabled = k <= lo; $('#hsNext').disabled = k >= hi;
-  const rec = hasShifts(k), pub = !!state.published[pk];
+  const p = HSP(), keys = pKeys(p), pk = ymd(p.start), wrap = $('#hShift'), note = $('#hsNote');
+  const rec = keys.some(hasShifts), pub = !!state.published[pk], stat = keys.map(k => dayStat(k)), lack = rec ? keys.filter((k, i) => stat[i].lack) : [];
+  $('#hsLabel').textContent = pLabel(p); $('#hsLabel').className = lack.length ? 'lack' : '';
   $('#hsStatus').textContent = !rec ? '未作成' : pub ? '確定済み' : '下書き'; $('#hsStatus').className = 'pill' + (rec && pub ? ' ok' : '');
   note.innerHTML = '';
   if (!state.staff.length) { wrap.innerHTML = '<div class="empty">スタッフがまだいません。「スタッフ」タブから登録してください。</div>'; return; }
-  if (!hasWork(k)) wrap.innerHTML = `<div class="empty">${rec ? 'この日に出勤するスタッフはいません。' : 'この日のシフトは、まだ作成されていません。'}</div>`;
-  else {
-    const rows = shiftStaff(keysP, pk).filter(s => isWork(dayShifts(k)[s.id]));
-    let html = `<table class="gantt" style="width:${D.n + H.length * D.c}px"><colgroup><col style="width:${D.n}px">${H.map(() => `<col style="width:${D.c}px">`).join('')}</colgroup><thead><tr><th class="name">出勤するスタッフ</th>${H.map(h => `<th>${fmt(h)}</th>`).join('')}</tr></thead><tbody>`;
-    rows.forEach(s => {
-      const sh = dayShifts(k)[s.id], cover = shiftHourList(sh), color = roleColor(s.role), cf = conflictOf(sh, adminPref(s.id, k, pk));
-      html += `<tr><th class="name"><b>${esc(s.name)}</b><div class="meta">${esc(s.role || '役割なし')}</div><div class="meta hs-time">${hm(sh.start)}–${hm(sh.end)}・実働${fh(shiftHours(sh))}h${cf === 'req' ? ' ※希望休' : cf === 'out' ? ' ※時間外' : ''}</div></th>` +
-        H.map(h => `<td class="cell view${cover.includes(h) ? ' on' : ''}"${cover.includes(h) ? ` style="background:${color}"` : ''}>${cover.includes(h) ? '●' : ''}</td>`).join('') + '</tr>';
-    });
-    html += '</tbody><tfoot><tr><th class="name">配置人数<small>最低〜最高</small></th>' + H.map(h => {
-      const c = st.cnt[h] || 0, r = rule(h); return `<td class="${c < r.min ? 'low' : c > r.max ? 'high' : ''}">${c}<small>${r.min}〜${r.max}</small></td>`;
-    }).join('') + '</tr></tfoot></table>';
-    wrap.innerHTML = html;
-  }
-  const parts = [`<span class="pill">出勤 ${st.n}人</span>`];
-  if (st.rule) parts.push(`人数ルール：最低${st.rule.min}人${st.rule.max == null ? '' : '・最高' + st.rule.max + '人'}`);
-  if (lack) parts.push(`<span class="lackmsg">⚠ 人数が足りません${st.dayShort ? `（1日の人数があと${st.dayShort}人）` : ''}${st.short ? '（足りない時間帯があります）' : ''}</span>`);
-  const req = [], off = [];
-  state.staff.forEach(s => { const sh = dayShifts(k)[s.id]; if (isWork(sh)) return; if (adminPref(s.id, k, pk).status === 'off') req.push(s.name); else if (sh && sh.off) off.push(s.name); });
-  note.innerHTML = parts.join('　') + (req.length ? `<br>希望休：${esc(req.join('、'))}` : '') + (off.length ? `<br>休み：${esc(off.join('、'))}` : '');
+  if (!rec) { wrap.innerHTML = '<div class="empty">この期間のシフトは、まだ作成されていません。「シフト管理で開く」から作成できます。</div>'; return; }
+  renderShiftDesktop(keys, pk, wrap, true);   // シフト管理と同じ表（見るだけ）
+  let tot = 0; state.staff.forEach(s => keys.forEach(k => { tot += shiftHours(dayShifts(k)[s.id]); }));
+  note.innerHTML = `<span class="pill">合計 ${fh(tot)}時間</span>` + (lack.length ? `<span class="lackmsg">⚠ 人数が足りない日が${lack.length}日あります：${lack.slice(0, 8).map(mdText).join('、')}${lack.length > 8 ? `…ほか${lack.length - 8}日` : ''}</span>` : '<span>人数が足りない日はありません</span>');
 }
 
 function renderWork(keep) {
@@ -315,11 +299,12 @@ function renderGantt(keep) { renderHomeShift(); renderWork(keep); }
 
 /* 日付の移動（上下それぞれ） */
 const stepHome = (which, n) => { const nk = clampHome(ymd(addDays(parseYmd(which === 's' ? HS() : HW()), n))); if (which === 's') _hs = nk; else _hw = nk; renderGantt(true); };
-$('#hsPrev').addEventListener('click', () => stepHome('s', -1)); $('#hsNext').addEventListener('click', () => stepHome('s', 1));
-$('#hsToday').addEventListener('click', () => { _hs = todayKey(); renderGantt(true); });
+$('#hsPrev').addEventListener('click', () => { _hsP = periodOf(addDays(HSP().start, -1)); renderGantt(true); });
+$('#hsNext').addEventListener('click', () => { _hsP = periodOf(HSP().end); renderGantt(true); });
+$('#hsToday').addEventListener('click', () => { _hsP = periodOf(new Date()); renderGantt(true); });
 $('#hwPrev').addEventListener('click', () => { stepHome('w', -1); }); $('#hwNext').addEventListener('click', () => { stepHome('w', 1); });
 $('#hwToday').addEventListener('click', () => { _hw = todayKey(); renderGantt(); });
-$('#hsEdit').addEventListener('click', () => { aP = periodOf(parseYmd(HS())); mDay = HS(); switchTab('shift'); });
+$('#hsEdit').addEventListener('click', () => { aP = HSP(); mDay = null; switchTab('shift'); });
 
 $('#gantt').addEventListener('click', async e => {
   const td = e.target.closest('.cell[data-id]'); if (!td) return;
@@ -960,11 +945,12 @@ function shiftCell(s, k, pk, compact) {
   return { hrs: 0, html: `<td class="scell empty ${cls}${c}" title="${esc(s.name + '：' + title)}" ${attr}>${lab}</td>` };
 }
 
-function renderShiftDesktop(keys, pk) {
+function renderShiftDesktop(keys, pk, el, ro) {
+  el = el || $('#wGrid');
   const today = todayKey(), L = state.settings, anyWage = state.staff.some(s => s.wage), compact = keys.length > 14, nameW = compact ? 156 : NAME_W;
   const dayCount = Array(keys.length).fill(0), dayCost = Array(keys.length).fill(0), active = keys.some(hasShifts), stat = keys.map(k => dayStat(k));
   const lowAt = i => active && stat[i].lack, anyRule = stat.some(x => x.rule);
-  let html = `<table class="gantt shiftgrid${compact ? ' compact' : ''}" style="width:100%;min-width:${nameW + keys.length * (compact ? 30 : 64)}px"><colgroup><col style="width:${nameW}px"></colgroup><thead><tr><th class="name">スタッフ</th>` +
+  let html = `<table class="gantt shiftgrid${compact ? ' compact' : ''}${ro ? ' ro' : ''}" style="width:100%;min-width:${nameW + keys.length * (compact ? 30 : 64)}px"><colgroup><col style="width:${nameW}px"></colgroup><thead><tr><th class="name">スタッフ</th>` +
     keys.map((k, i) => { const d = parseYmd(k), low = lowAt(i); return `<th class="${low ? 'low ' : ''}${k === today ? 'today ' : ''}${d.getDay() === 0 ? 'sun' : d.getDay() === 6 ? 'sat' : ''}" title="${mdText(k)}（${DOW[d.getDay()]}）${low ? '：人数が足りません' : ''}">${compact && i && d.getDate() !== 1 ? d.getDate() : mdText(k)}<small>${compact ? DOW[d.getDay()] : '（' + DOW[d.getDay()] + '）'}</small>${low ? '<i class="warnmark">⚠</i>' : ''}</th>`; }).join('') + '</tr></thead><tbody>';
   shiftStaff(keys, pk).forEach(s => {
     const sb = subOf(s.id, pk); let tot = 0;
@@ -982,7 +968,7 @@ function renderShiftDesktop(keys, pk) {
   if (anyRule) html += '<tr class="need"><th class="name">必要人数<small>人数ルール</small></th>' + stat.map(st => `<td>${st.rule ? st.rule.min + (compact ? (st.rule.max == null ? '+' : '-' + st.rule.max) : '〜' + (st.rule.max == null ? '' : st.rule.max)) : '—'}</td>`).join('') + '</tr>';
   html += '<tr><th class="name">出勤人数</th>' + dayCount.map((n, i) => `<td class="${lowAt(i) ? 'low' : stat[i].over ? 'high' : ''}" title="${lowAt(i) ? '人数が足りません' : stat[i].over ? '最高人数を超えています' : ''}">${n}${compact ? '' : '人'}</td>`).join('') + '</tr>';
   if (anyWage) html += '<tr><th class="name">人件費</th>' + dayCost.map(c => `<td>${c ? (compact ? Math.round(c / 1000) + 'k' : money(c)) : '—'}</td>`).join('') + '</tr>';
-  $('#wGrid').innerHTML = html + '</tfoot></table>';
+  el.innerHTML = html + '</tfoot></table>';
 }
 
 /* ---- スマホ版：月カレンダー（出勤人数つき）＋ 選んだ日のスタッフ一覧 ---- */
