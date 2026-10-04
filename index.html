@@ -12,7 +12,7 @@
   <nav class="tabs">
     <button class="tab active" data-tab="home"><span class="lg">ホーム</span><span class="sh">ホーム</span></button>
     <button class="tab" data-tab="shift"><span class="lg">シフト管理</span><span class="sh">シフト</span></button>
-    <button class="tab" data-tab="setup"><span class="lg">作業スケジュール作成</span><span class="sh">作成</span></button>
+    <button class="tab" data-tab="setup"><span class="lg">スタッフ</span><span class="sh">スタッフ</span></button>
     <button class="tab" data-tab="settings"><span class="lg">設定</span><span class="sh">設定</span></button>
   </nav>
   <!-- 画面の切り替え（開発者のログイン時だけ表示されます） -->
@@ -33,22 +33,51 @@
 
 <main>
   <section id="home" class="panel active">
-    <div class="toolbar">
-      <div>
-        <p class="hint">マスをクリックすると、その時間の勤務を入れたり外したりできます。</p>
-        <p id="total" class="total"></p>
+    <div class="hpanel">
+      <div class="hhead">
+        <h2>シフト表<small>作成完了分</small></h2>
+        <div class="daynav">
+          <button type="button" class="btn small" id="hsPrev" aria-label="前の日">‹</button>
+          <strong id="hsLabel"></strong>
+          <button type="button" class="btn small" id="hsNext" aria-label="次の日">›</button>
+          <button type="button" class="btn small" id="hsToday">今日</button>
+        </div>
+        <span id="hsStatus" class="pill"></span>
+        <button type="button" class="btn small" id="hsEdit">シフト管理で開く</button>
       </div>
-      <div class="actions">
-        <button id="btnAutoHome" class="btn primary">自動作成</button>
-        <button id="btnClear" class="btn">スケジュールを消去</button>
+      <div id="hShift" class="gantt-wrap"></div>
+      <div id="hsNote" class="hsnote"></div>
+    </div>
+
+    <div class="hpanel">
+      <div class="hhead">
+        <h2>作業表<small>当日分</small></h2>
+        <div class="daynav">
+          <button type="button" class="btn small" id="hwPrev" aria-label="前の日">‹</button>
+          <strong id="hwLabel"></strong>
+          <button type="button" class="btn small" id="hwNext" aria-label="次の日">›</button>
+          <button type="button" class="btn small" id="hwToday">今日</button>
+        </div>
       </div>
+      <div class="toolbar">
+        <div>
+          <p id="hwNote" class="hint"></p>
+          <p id="ruleNote" class="meta"></p>
+          <p id="total" class="total"></p>
+        </div>
+        <div class="actions">
+          <button id="btnFromShift" class="btn">シフト通りに作る</button>
+          <button id="btnAutoHome" class="btn primary">人数ルールで自動作成</button>
+          <button id="btnClear" class="btn">この日の作業表を空にする</button>
+        </div>
+      </div>
+      <div class="sortbar">
+        <label class="inline">並び替え<select id="hSort"></select></label>
+        <button type="button" class="btn small" id="hDir"></button>
+      </div>
+      <div id="legend" class="legend"></div>
+      <div id="gantt" class="gantt-wrap"></div>
     </div>
-    <div class="sortbar">
-      <label class="inline">並び替え<select id="hSort"></select></label>
-      <button type="button" class="btn small" id="hDir"></button>
-    </div>
-    <div id="legend" class="legend"></div>
-    <div id="gantt" class="gantt-wrap"></div>
   </section>
 
   <section id="shift" class="panel">
@@ -71,7 +100,13 @@
     <div class="dlbar">
       <label class="inline">提出締切<input type="date" id="wDeadline" aria-label="希望シフトの提出締切"></label>
       <button type="button" class="btn small" id="wDlClear">解除</button>
+      <button type="button" class="btn small" id="wCloseNow">今すぐ締め切る</button>
       <span id="wDlInfo" class="pill"></span>
+    </div>
+    <div id="wRuleNote" class="rulenote"></div>
+    <div class="sortbar">
+      <label class="inline">スタッフの並び順<select id="wSort"></select></label>
+      <button type="button" class="btn small" id="wDir"></button>
     </div>
     <p class="hint">従業員が提出した希望が表に出ます（<b>休</b>＝希望休、<b>○</b>＝出勤可能、時間＝その時間だけ可能）。マスをクリックしてシフトを入れます。希望休の日に入れるときは確認が出ます。期間の長さは設定タブで変えられます。</p>
     <div class="legend-shift">
@@ -82,6 +117,7 @@
       <span><i class="lg work"></i>シフト（役割の色）</span>
     </div>
     <p id="wTotal" class="total"></p>
+    <p id="wLack" class="lackline" hidden></p>
     <div id="wGrid" class="gantt-wrap"></div>
     <div id="wMobile" class="mshift" hidden></div>
     <div id="wReq" class="card reqpanel"></div>
@@ -122,6 +158,7 @@
             <div class="actions"><button type="button" class="btn primary" id="eSubmit">提出する</button><span id="eSubStatus" class="substatus"></span></div>
           </div>
         </div>
+        <div id="ePwNotice" class="dlbanner" hidden>初期パスワードのままです。「設定」タブでパスワードを設定してください。</div>
         <div id="eRules" hidden>
           <div class="card">
             <h2>いつもの希望（毎週のルール）</h2>
@@ -131,6 +168,18 @@
               <tbody id="eRulesBody"></tbody>
             </table>
             <div class="actions"><button type="button" class="btn" id="eRuleAdd">ルールを追加</button></div>
+          </div>
+          <div class="card" id="ePwCard">
+            <h2 id="ePwTitle">パスワード設定</h2>
+            <p id="ePwNote" class="meta"></p>
+            <div id="ePwFields">
+              <label id="ePwOldRow">旧パスワード<input id="ePwOld" type="password" autocomplete="current-password"></label>
+              <label>新しいパスワード（6文字以上）<input id="ePwNew" type="password" autocomplete="new-password"></label>
+              <label>新しいパスワード（確認）<input id="ePwNew2" type="password" autocomplete="new-password"></label>
+              <p id="ePwMsg" class="msg warn"></p>
+              <div class="actions"><button type="button" class="btn primary" id="ePwSave">登録する</button></div>
+            </div>
+            <p class="forgot">パスワードを忘れた場合は、管理者に連絡してください。管理者がパスワードを再発行します。</p>
           </div>
         </div>
       </div>
@@ -152,6 +201,11 @@
             <select id="dMode"><option value="add">今のスタッフに追加する</option><option value="replace">今のスタッフをすべて入れ替える</option></select>
           </label>
         </div>
+        <label>業態（モード）
+          <select id="dInd"><option value="generic">汎用（今の役割をそのまま使う）</option><option value="restaurant">飲食店モード</option><option value="convenience">コンビニモード</option><option value="supermarket">スーパーモード</option><option value="apparel">アパレルモード</option></select>
+        </label>
+        <p id="dIndNote" class="meta"></p>
+        <label class="check"><input type="checkbox" id="dApply" checked> 役割（階級）・営業時間・人数ルールも、その業態に合わせて入れ替える</label>
         <label class="check"><input type="checkbox" id="dAcct"> 従業員のログインアカウントも発行する（初期パスワードを表示します）</label>
         <div class="actions"><button type="button" class="btn primary" id="dRandomStaff">ランダムで登録する</button></div>
       </div>
@@ -222,13 +276,82 @@
             <button type="button" class="btn" id="fCancel" hidden>編集をやめる</button>
           </div>
         </form>
-        <h2 class="sub">登録済みスタッフ</h2>
+      </div>
+      <div class="card">
+        <h2>登録済みスタッフ</h2>
         <ul id="staffList" class="staff-list"></ul>
       </div>
 
+    </div>
+  </section>
+
+  <section id="settings" class="panel">
+    <nav class="setcats" id="setCats" aria-label="設定のカテゴリー">
+      <button type="button" class="scbtn active" data-cat="shift">シフト</button>
+      <button type="button" class="scbtn" data-cat="work">作業スケジュール</button>
+      <button type="button" class="scbtn" data-cat="auto">自動作成</button>
+      <button type="button" class="scbtn" data-cat="common">共通</button>
+      <button type="button" class="scbtn" data-cat="account">アカウント</button>
+    </nav>
+    <div class="setcat" data-cat="shift">
+      <p class="catdesc"><b>シフト</b>　日ごとのシフト（誰がどの日に働くか）に関する設定です。シフト管理タブの表・希望の提出・シフトの自動作成に反映されます。</p>
+      <div class="cols">
       <div class="card">
-        <h2>自動作成の条件</h2>
-        <p class="meta">表に表示する時間（開始・終了）は、設定タブの「表の表示時間」で変えられます。</p>
+        <h2>シフト表の期間・提出締切</h2>
+        <label>期間の種類
+          <select id="pMode"><option value="month">月ごと（1か月）</option><option value="weeks">数週間ごと</option></select>
+        </label>
+        <div id="pMonthBox">
+          <label>月の開始日（例：16 なら 16日〜翌15日）<input type="number" id="pStart" min="1" max="28" step="1"></label>
+        </div>
+        <div id="pWeeksBox" class="row2">
+          <label>1期間の週数<select id="pWeeks"><option value="1">1週間</option><option value="2">2週間</option><option value="3">3週間</option><option value="4">4週間</option><option value="5">5週間</option><option value="6">6週間</option></select></label>
+          <label>最初の期間の開始日<input type="date" id="pAnchor"></label>
+        </div>
+        <label>締切の初期値（期間の開始日の何日前。0なら設定しない）<input type="number" id="pDlDays" min="0" max="60" step="1"></label>
+        <p id="pNote" class="meta"></p>
+        <p class="meta">管理者のシフト表と、従業員の希望提出は、この期間ごとに区切られます。</p>
+      </div>
+      <div class="card" id="srCard">
+        <h2>日ごとの人数ルール（最低・最高人数）</h2>
+        <p class="meta">1日に出勤する人数の、最低と最高を決めます。平日・週末・毎日・曜日・月ごとなど、自由に組み合わせられます。ここで決めた人数は、シフト管理の表と自動作成に反映されます。</p>
+        <div class="tscroll">
+          <table class="rules sr">
+            <thead><tr><th>対象の日</th><th>月</th><th>日付</th><th>最低</th><th>最高</th><th></th></tr></thead>
+            <tbody id="srBody"></tbody>
+          </table>
+        </div>
+        <div class="actions"><button type="button" class="btn" id="srAdd">ルールを追加</button><button type="button" class="btn" id="srSample">平日・週末のひな形を追加</button></div>
+        <p id="srNote" class="meta"></p>
+      </div>
+      <div class="card">
+        <h2>シフトの注意ライン</h2>
+        <div class="row2">
+          <label>1日の勤務時間（時間）<input type="number" id="limDay" min="0.5" max="24" step="0.5"></label>
+          <label>1週間の勤務時間（時間）<input type="number" id="limWeek" min="0.5" max="168" step="0.5"></label>
+        </div>
+        <label>連続勤務の上限（日）<input type="number" id="limStreak" min="1" max="30" step="1"></label>
+        <p class="meta">超えるとシフト管理の表に ⚠ が付き、自動作成でもこの範囲を守ります（連続勤務の上限も同様）。初期値は法定労働時間の原則（1日8時間・週40時間）です。事業所の規模や労使協定で上限が異なる場合があるため、実際の運用では厚生労働省の案内などで確認してください。</p>
+      </div>
+      </div>
+    </div>
+    <div class="setcat" data-cat="work" hidden>
+      <p class="catdesc"><b>作業スケジュール</b>　1日の中の時間帯ごとの作業表（何時に何人いるか）に関する設定です。ホームの作業表に反映されます。</p>
+      <div class="cols">
+      <div class="card">
+        <h2>表の表示時間</h2>
+        <div class="stepper-row"><span>開始時刻</span>
+          <button type="button" class="btn small" data-step="open:-1" aria-label="開始を1時間早める">−</button><b id="vOpen"></b>
+          <button type="button" class="btn small" data-step="open:1" aria-label="開始を1時間遅らせる">＋</button></div>
+        <div class="stepper-row"><span>終了時刻</span>
+          <button type="button" class="btn small" data-step="close:-1" aria-label="終了を1時間早める">−</button><b id="vClose"></b>
+          <button type="button" class="btn small" data-step="close:1" aria-label="終了を1時間遅らせる">＋</button></div>
+        <p id="rangeNote" class="meta"></p>
+        <p class="meta">例：25:00の列まで表示したいときは、終了を26:00にします。人数の設定や自動作成も、この範囲が対象です。</p>
+      </div>
+      <div class="card">
+        <h2>時間帯ごとの人数（最低・最高）</h2>
+        <p class="meta">1日の中の時間帯ごとに、何人いてほしいかを決めます。ホームの「作業表」の人数チェックと、作業表の自動作成に使われます。</p>
         <div class="bulk">
           <b>一括設定</b>
           <div class="bulk-row">
@@ -248,49 +371,15 @@
           <tbody id="roleRuleBody"></tbody>
         </table>
         <p class="meta">最高人数を空欄にすると上限なしです。役割は設定タブで追加・編集できます。</p>
-        <div class="actions"><button id="btnAuto" class="btn primary big">自動作成</button></div>
-        <p id="ruleNote" class="meta"></p>
+      </div>
       </div>
     </div>
-  </section>
-
-  <section id="settings" class="panel">
-    <div class="cols">
-      <div class="card">
-        <h2>通貨と為替</h2>
-        <label>金額の表示通貨
-          <select id="sCur"><option value="JPY">円（JPY）</option><option value="USD">ドル（USD）</option></select>
-        </label>
-        <label class="check"><input type="checkbox" id="sAuto"> ページを開くたびに最新の為替レートを自動取得する</label>
-        <label>為替レート（1ドル＝何円か）
-          <div class="wage"><input type="number" id="sRate" min="0.01" step="0.01"><button type="button" class="btn" id="sFetch">今すぐ更新</button></div>
-        </label>
-        <p id="rateStatus" class="meta"></p>
-        <p class="meta">スタッフごとに時給を円・ドルのどちらでも入力でき、人件費は表示通貨に換算して集計します。自動取得をオフにすると、レートを手入力できます。</p>
-      </div>
-      <div class="card">
-        <h2>役割の管理</h2>
-        <form id="roleForm" class="role-form" autocomplete="off">
-          <input type="text" id="rName" placeholder="役割の名前（例 レジ）" maxlength="12">
-          <input type="color" id="rColor" value="#0f6e6e" aria-label="色">
-          <button class="btn primary" type="submit" id="rSubmit">追加</button>
-          <button class="btn" type="button" id="rCancel" hidden>やめる</button>
-        </form>
-        <ul id="roleList" class="staff-list"></ul>
-      </div>
-      <div class="card">
-        <h2>表の表示時間</h2>
-        <div class="stepper-row"><span>開始時刻</span>
-          <button type="button" class="btn small" data-step="open:-1" aria-label="開始を1時間早める">−</button><b id="vOpen"></b>
-          <button type="button" class="btn small" data-step="open:1" aria-label="開始を1時間遅らせる">＋</button></div>
-        <div class="stepper-row"><span>終了時刻</span>
-          <button type="button" class="btn small" data-step="close:-1" aria-label="終了を1時間早める">−</button><b id="vClose"></b>
-          <button type="button" class="btn small" data-step="close:1" aria-label="終了を1時間遅らせる">＋</button></div>
-        <p id="rangeNote" class="meta"></p>
-        <p class="meta">例：25:00の列まで表示したいときは、終了を26:00にします。人数の設定や自動作成も、この範囲が対象です。</p>
-      </div>
+    <div class="setcat" data-cat="auto" hidden>
+      <p class="catdesc"><b>自動作成</b>　シフトの自動作成と、作業表の自動作成の、どちらにも共通のルールです。</p>
+      <div class="cols">
       <div class="card">
         <h2>自動作成のルール</h2>
+        <p class="meta">シフトの自動作成と、作業表の自動作成の、どちらにも使うルールです。<b>どのタイプでも、希望休は必ず守ります。</b></p>
         <label>ルールのタイプ<select id="aPreset"></select></label>
         <p id="aDesc" class="meta"></p>
         <div class="row2">
@@ -304,36 +393,45 @@
         <label>予備の出退勤時間<select id="aSub"></select></label>
         <label>人手が足りないときの対応<select id="aFix"></select></label>
       </div>
+      </div>
+    </div>
+    <div class="setcat" data-cat="common" hidden>
+      <p class="catdesc"><b>共通</b>　役割（階級）や通貨など、アプリ全体に関わる設定です。</p>
+      <div class="cols">
       <div class="card">
-        <h2>シフトの注意ライン</h2>
-        <div class="row2">
-          <label>1日の勤務時間（時間）<input type="number" id="limDay" min="0.5" max="24" step="0.5"></label>
-          <label>1週間の勤務時間（時間）<input type="number" id="limWeek" min="0.5" max="168" step="0.5"></label>
-        </div>
-        <label>連続勤務の上限（日）<input type="number" id="limStreak" min="1" max="30" step="1"></label>
-        <p class="meta">超えるとシフト管理の表に ⚠ が付き、自動作成でもこの範囲を守ります（連続勤務の上限も同様）。初期値は法定労働時間の原則（1日8時間・週40時間）です。事業所の規模や労使協定で上限が異なる場合があるため、実際の運用では厚生労働省の案内などで確認してください。</p>
+        <h2>役割（階級）の管理</h2>
+        <p class="meta">並び順が階級の順です（上ほど上位）。シフト管理の「階級順」の並び替えや、ホームの「役割別」に使われます。</p>
+        <form id="roleForm" class="role-form" autocomplete="off">
+          <input type="text" id="rName" placeholder="役割の名前（例 レジ）" maxlength="12">
+          <input type="color" id="rColor" value="#0f6e6e" aria-label="色">
+          <button class="btn primary" type="submit" id="rSubmit">追加</button>
+          <button class="btn" type="button" id="rCancel" hidden>やめる</button>
+        </form>
+        <ul id="roleList" class="staff-list"></ul>
       </div>
       <div class="card">
-        <h2>シフト表の期間</h2>
-        <label>期間の種類
-          <select id="pMode"><option value="month">月ごと（1か月）</option><option value="weeks">数週間ごと</option></select>
+        <h2>通貨と為替</h2>
+        <label>金額の表示通貨
+          <select id="sCur"><option value="JPY">円（JPY）</option><option value="USD">ドル（USD）</option></select>
         </label>
-        <div id="pMonthBox">
-          <label>月の開始日（例：16 なら 16日〜翌15日）<input type="number" id="pStart" min="1" max="28" step="1"></label>
-        </div>
-        <div id="pWeeksBox" class="row2">
-          <label>1期間の週数<select id="pWeeks"><option value="1">1週間</option><option value="2">2週間</option><option value="3">3週間</option><option value="4">4週間</option><option value="5">5週間</option><option value="6">6週間</option></select></label>
-          <label>最初の期間の開始日<input type="date" id="pAnchor"></label>
-        </div>
-        <label>締切の初期値（期間の開始日の何日前。0なら設定しない）<input type="number" id="pDlDays" min="0" max="60" step="1"></label>
-        <p id="pNote" class="meta"></p>
-        <p class="meta">管理者のシフト表と、従業員の希望提出は、この期間ごとに区切られます。</p>
+        <label class="check"><input type="checkbox" id="sAuto"> ページを開くたびに最新の為替レートを自動取得する</label>
+        <label>為替レート（1ドル＝何円か）
+          <div class="wage"><input type="number" id="sRate" min="0.01" step="0.01"><button type="button" class="btn" id="sFetch">今すぐ更新</button></div>
+        </label>
+        <p id="rateStatus" class="meta"></p>
+        <p class="meta">スタッフごとに時給を円・ドルのどちらでも入力でき、人件費は表示通貨に換算して集計します。自動取得をオフにすると、レートを手入力できます。</p>
       </div>
+      </div>
+    </div>
+    <div class="setcat" data-cat="account" hidden>
+      <p class="catdesc"><b>アカウント</b>　従業員がログインするためのIDとパスワードを管理します。</p>
+      <div class="cols">
       <div class="card" id="acCard">
         <h2>従業員アカウント</h2>
         <p class="meta">従業員がログインするためのIDとパスワードを発行します。初期パスワードは、発行したその画面でしか確認できません。従業員は、最初のログインで自分のパスワードに変更します。</p>
         <div class="actions"><button type="button" class="btn primary" id="acAll">未発行の全員に発行</button></div>
         <ul id="acList" class="staff-list"></ul>
+      </div>
       </div>
     </div>
   </section>

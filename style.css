@@ -365,3 +365,59 @@ body[data-layout="mobile"] .login{padding-top:max(16px,env(safe-area-inset-top))
 body[data-layout="mobile"] .login-card{padding:20px 18px}
 body[data-layout="mobile"] .user{margin-left:auto;gap:6px}
 body[data-layout="mobile"] .user #uName{max-width:9em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---- ホーム：シフト表（上）＋作業表（下） ---- */
+.hpanel{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px 16px;margin-bottom:18px}
+.hhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.hhead h2{margin:0;font-size:16px}
+.hhead h2 small{margin-left:8px;font-size:12px;font-weight:400;color:var(--sub)}
+.daynav{display:flex;align-items:center;gap:6px}
+.daynav strong{min-width:9.5em;text-align:center;font-size:15px}
+.daynav strong.lack{color:#b3261e}
+.daynav .btn.small{min-width:34px}
+.hpanel .toolbar{margin-bottom:6px}
+.hsnote{margin-top:8px;font-size:13px;color:var(--ink);line-height:1.8}
+.hsnote .pill{margin-right:4px}
+.hsnote .lackmsg{color:#b3261e;font-weight:700}
+.hs-time{font-weight:400;color:var(--sub);font-size:12px}
+.cell.view{cursor:default}
+.cell.view:hover{outline:none}
+/* ---- 人数不足の日 ---- */
+.shiftgrid thead th.low{background:#fde8e1;color:#b3261e;box-shadow:inset 0 -3px 0 #e5675b}
+.warnmark{display:block;font-style:normal;font-size:11px;line-height:1.2;color:#b3261e}
+.shiftgrid tfoot td.low{background:#fde8e1;color:#b3261e}
+.shiftgrid tfoot td.high{background:#fbf0d3;color:#8a5a00}
+.shiftgrid tfoot .need td{font-weight:400;color:var(--sub);font-size:12px}
+.lackline{margin:6px 0 10px;padding:8px 12px;background:#fde8e1;border-left:4px solid #e5675b;border-radius:4px;color:#b3261e;font-weight:700;font-size:13px}
+.rulenote{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 10px;padding:8px 12px;border-radius:var(--radius);font-size:13px}
+.rulenote.on{background:#e6f2f1;border:1px solid #b9dad7}
+.rulenote.none{background:#f5f7f9;border:1px dashed var(--line);color:var(--sub)}
+.rulenote .chip{background:#fff;border:1px solid #b9dad7;border-radius:12px;padding:2px 10px;font-size:12px}
+.mday .wm{display:block;font-style:normal;font-size:10px;color:#b3261e;line-height:1}
+/* ---- 設定：カテゴリー ---- */
+.setcats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.scbtn{--c:#0f6e6e;display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;padding:9px 18px;border-radius:22px;cursor:pointer;font:inherit;font-weight:700;color:var(--ink)}
+.scbtn::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--c)}
+.scbtn[data-cat="work"]{--c:#b7791f}
+.scbtn[data-cat="auto"]{--c:#6b5b95}
+.scbtn[data-cat="common"]{--c:#5f6b76}
+.scbtn[data-cat="account"]{--c:#3b6fb6}
+.scbtn.active{background:var(--c);border-color:var(--c);color:#fff}
+.scbtn.active::before{background:#fff}
+.catdesc{margin:0 0 14px;padding:10px 14px;background:#fff;border:1px solid var(--line);border-left:5px solid var(--c,#0f6e6e);border-radius:var(--radius);font-size:13px;line-height:1.7}
+.setcat[data-cat="shift"]{--c:#0f6e6e}
+.setcat[data-cat="work"]{--c:#b7791f}
+.setcat[data-cat="auto"]{--c:#6b5b95}
+.setcat[data-cat="common"]{--c:#5f6b76}
+.setcat[data-cat="account"]{--c:#3b6fb6}
+.setcat .card{border-left:4px solid var(--c)}
+.tscroll{overflow-x:auto}
+.sr select,.sr input{margin:0;padding:5px 8px;min-width:0}
+.sr input[type=number]{width:72px}
+.sr input[type=date]{width:140px}
+.forgot{margin:14px 0 0;padding:10px 12px;background:#fff7e6;border-left:3px solid #e0a63a;border-radius:4px;font-size:13px;line-height:1.7}
+body[data-layout="mobile"] .hpanel{padding:12px 10px 14px}
+body[data-layout="mobile"] .hhead{gap:8px}
+body[data-layout="mobile"] .daynav strong{min-width:7.5em;font-size:14px}
+body[data-layout="mobile"] .setcats{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;margin-left:-2px}
+body[data-layout="mobile"] .scbtn{flex:none;padding:9px 14px}
