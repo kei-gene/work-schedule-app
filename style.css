@@ -426,3 +426,6 @@ body[data-layout="mobile"] .scbtn{flex:none;padding:9px 14px}
 .shiftgrid.ro .scell:hover{filter:none;outline:none;background-clip:padding-box}
 .shiftgrid.ro .scell.empty:hover{background:inherit;color:inherit}
 .hhead .daynav strong#hsLabel{min-width:16em}
+
+.cell.brk{background:#dfe6ec;color:#51606e;font-size:11px;font-weight:700;cursor:default}
+.gantt .cell.view{cursor:default}

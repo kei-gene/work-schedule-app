@@ -36,6 +36,8 @@ function load() {
   if (s.schedule && Object.values(s.schedule).some(a => a && a.length) && !Object.keys(s.work).length) {   // 日付のなかった旧データは、今日の分に引き継ぐ
     const n = new Date(); s.work[`${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`] = s.schedule;
   }
+  s.workMode = s.workMode || {};    // 作業表の作り方 { 日付: 'rules'（人数ルールで自動作成）| 'manual'（手動で調整） }。ないときは「シフト通り」
+  Object.keys(s.work).forEach(d => { if (!s.workMode[d]) s.workMode[d] = 'manual'; });   // 以前に手で作った作業表は、手動として残す
   s.schedule = {};
   s.settings = s.settings || { display: 'JPY', rate: 150 };
   if (s.settings.auto === undefined) s.settings.auto = true;
@@ -227,11 +229,57 @@ const homeRange = () => [ymd(addDays(new Date(), -HOME_BACK)), ymd(addDays(new D
 const clampHome = k => { const [lo, hi] = homeRange(); return k < lo ? lo : k > hi ? hi : k; };
 const dayLabel = k => { const d = parseYmd(k); return `${d.getMonth() + 1}/${d.getDate()}（${DOW[d.getDay()]}）` + (k === todayKey() ? '・今日' : ''); };
 
-/* 作業表は日ごと。まだ作っていない日は、その日のシフトから表示用に作る */
+/* 作業表は、その日のシフトから自動で作られる（シフトを変えると、作業表も変わる）。
+   働く時間は、シフトの出勤〜退勤のまま「つながった時間」。法定の休憩は、シフトの真ん中あたりに「休憩」として入れる */
 const shiftHourList = sh => { const a = Math.floor(tmin(sh.start) / 60), b = Math.ceil(tmin(sh.end) / 60), r = []; for (let h = a; h < b; h++) r.push(h); return r; };
-const deriveWork = date => { const o = {}; Object.entries(dayShifts(date)).forEach(([id, sh]) => { if (isWork(sh)) o[id] = shiftHourList(sh); }); return o; };
-const workOf = date => state.work[date] || deriveWork(date);
-const ensureWork = date => (state.work[date] = state.work[date] || deriveWork(date));
+const breakHourList = (sh, idx) => {   // 休憩のマス（最初と最後の時間はさけ、人ごとに1時間ずつずらす）
+  const hrs = shiftHourList(sh), n = Math.ceil((sh.brk || 0) / 60);
+  if (!n || hrs.length < n + 2) return [];
+  const at = Math.min(hrs.length - n - 1, Math.max(1, Math.floor((hrs.length - n) / 2) + [0, 1, -1][idx % 3]));
+  return hrs.slice(at, at + n);
+};
+const normW = v => Array.isArray(v) ? { w: v.slice(), b: [] } : { w: [...((v && v.w) || [])], b: [...((v && v.b) || [])] };
+/* シフトから作る。optimize=true のときは、時間帯ごとの最低人数がなるべく保てるように、休憩の位置を調整する */
+function deriveDay(date, optimize) {
+  const order = state.staff.filter(s => isWork(dayShifts(date)[s.id])), work = {}, brk = {}, H = hoursList(), cover = {};
+  H.forEach(h => { cover[h] = 0; });
+  order.forEach(s => shiftHourList(dayShifts(date)[s.id]).forEach(h => { if (cover[h] !== undefined) cover[h]++; }));
+  order.map((s, i) => ({ s, i })).sort((a, b) => shiftHourList(dayShifts(date)[b.s.id]).length - shiftHourList(dayShifts(date)[a.s.id]).length || a.i - b.i).forEach(({ s, i }) => {
+    const sh = dayShifts(date)[s.id], hrs = shiftHourList(sh), n = Math.ceil((sh.brk || 0) / 60);
+    let br = [];
+    if (n && hrs.length >= n + 2) {
+      if (!optimize) br = breakHourList(sh, i);
+      else {
+        let bestAt = 1, bestScore = -Infinity; const mid = (hrs.length - n) / 2;
+        for (let at = 1; at <= hrs.length - n - 1; at++) {
+          const slack = Math.min(...hrs.slice(at, at + n).map(h => cover[h] === undefined ? 99 : cover[h] - 1 - rule(h).min));
+          const sc = slack * 10 - Math.abs(at - mid);   // 人が多い時間に休憩を置く。同じなら、真ん中に近いほう
+          if (sc > bestScore) { bestScore = sc; bestAt = at; }
+        }
+        br = hrs.slice(bestAt, bestAt + n);
+      }
+      br.forEach(h => { if (cover[h] !== undefined) cover[h]--; });
+    }
+    brk[s.id] = br; work[s.id] = hrs.filter(h => !br.includes(h));
+  });
+  return { work, brk, order };
+}
+function workDay(date) {   // { work: {ID: [働く時間]}, brk: {ID: [休憩の時間]}, mode }
+  const mode = state.workMode[date] || 'shift';
+  if (mode === 'manual') {
+    const M = state.work[date] || {}, work = {}, brk = {};
+    Object.keys(M).forEach(id => { const x = normW(M[id]); work[id] = x.w; brk[id] = x.b; });
+    return { work, brk, mode };
+  }
+  const d = deriveDay(date, mode === 'rules');
+  return { work: d.work, brk: d.brk, mode };
+}
+const workOf = date => workDay(date).work;
+function materialize(date) {   // 連動している表を、手動で直せる形にする
+  const { work, brk } = workDay(date), M = {};
+  Object.keys(work).forEach(id => { M[id] = { w: work[id].slice(), b: (brk[id] || []).slice() }; });
+  state.work[date] = M; state.workMode[date] = 'manual';
+}
 
 let _hsP = null;   // ホームのシフト表で表示中の期間（はじめは今日を含む期間＝1か月分）
 const HSP = () => _hsP || (_hsP = periodOf(new Date()));
@@ -249,47 +297,50 @@ function renderHomeShift() {
 }
 
 function renderWork(keep) {
-  const H = hoursList(), wrap = $('#gantt'), k = HW(), W = workOf(k), shiftOn = hasWork(k), pk = pkOf(k), [lo, hi] = homeRange(), D = dim();
+  const H = hoursList(), wrap = $('#gantt'), k = HW(), pk = pkOf(k), [lo, hi] = homeRange(), D = dim(), shiftOn = hasWork(k);
+  const { work, brk, mode } = workDay(k), manual = mode === 'manual';
   $('#legend').innerHTML = state.roles.map(r => `<span><i style="background:${r.color}"></i>${esc(r.name)}</span>`).join('') +
-    '<span><i style="background:#5f6b76"></i>役割なし</span><span><i style="background:#f3faf9;border:1px solid #ccc"></i>出勤できる時間</span>' + (shiftOn ? '' : '<span><i style="background:#fbf6ea;border:1px solid #ccc"></i>予備時間</span>');
+    '<span><i style="background:#5f6b76"></i>役割なし</span><span><i style="background:#dfe6ec;border:1px solid #bcc8d2"></i>休憩（法定）</span>' + (manual ? '<span><i style="background:#f3faf9;border:1px solid #ccc"></i>出勤できる時間</span>' : '');
   $('#hwLabel').textContent = dayLabel(k); $('#hwPrev').disabled = k <= lo; $('#hwNext').disabled = k >= hi;
-  $('#hwNote').textContent = shiftOn ? 'この日のシフトをもとに表示しています。マスをクリックして調整できます。' : 'この日のシフトがまだないため、全スタッフを表示しています。';
-  let total = 0;
-  if (!state.staff.length) {
-    wrap.innerHTML = '<div class="empty">スタッフがまだいません。「スタッフ」タブから登録してください。</div>';
+  const drift = manual && shiftOn && (() => { const dw = deriveDay(k).work, ids = new Set([...Object.keys(dw), ...Object.keys(work).filter(i => (work[i] || []).length)]);
+    return [...ids].some(i => JSON.stringify([...(dw[i] || [])].sort((a, b) => a - b)) !== JSON.stringify([...(work[i] || []), ...(brk[i] || [])].sort((a, b) => a - b))); })();   // シフトと違う部分があるか
+  $('#hwMode').textContent = manual ? (drift ? '手動で調整中（シフトと違う部分あり）' : '手動で調整中') : mode === 'rules' ? '人数ルールで自動作成（シフトと連動）' : 'シフトと連動中';
+  $('#hwMode').className = 'pill' + (manual ? ' warn' : ' ok');
+  $('#hwNote').textContent = manual
+    ? 'マスをクリックすると「働く → 休憩 → なし」の順に切り替わります。「シフト通りに作る」で、シフトの時間どおりに戻せます。'
+    : 'この日のシフトに合わせて自動で作られています（シフトを変えると、この表も変わります）。マスをクリックすると、手動の調整に切り替わります。6時間を超える勤務には、法律で決まっている休憩を「休憩」として入れています。';
+  $('#btnFromShift').disabled = !shiftOn; $('#btnAutoHome').disabled = !shiftOn;
+  if (!state.staff.length || (!shiftOn && !manual)) {
+    wrap.innerHTML = `<div class="empty">${state.staff.length ? 'この日のシフトがまだありません。シフトを作ると、この表が自動で作られます。手動で作るときは「空にする」を押してください。' : 'スタッフがまだいません。「スタッフ」タブから登録してください。'}</div>`;
     $('#total').textContent = ''; return;
   }
-  if (!keep || !viewOrder) viewOrder = sortedStaff().map(s => s.id);
-  let rows = viewOrder.map(id => state.staff.find(s => s.id === id)).filter(Boolean).concat(state.staff.filter(s => !viewOrder.includes(s.id)));
-  if (shiftOn) rows = rows.filter(s => isWork(dayShifts(k)[s.id]));
+  const rank = new Map(sortedStaff().map((s, i) => [s.id, i]));
+  const rows = state.staff.filter(s => shiftOn ? (isWork(dayShifts(k)[s.id]) || (work[s.id] || []).length || (brk[s.id] || []).length) : true).sort((a, b) => rank.get(a.id) - rank.get(b.id));
+  let total = 0;
   let html = '<table class="gantt" style="width:' + (D.n + H.length * D.c) + 'px"><colgroup><col style="width:' + D.n + 'px">' + H.map(() => `<col style="width:${D.c}px">`).join('') + '</colgroup><thead><tr><th class="name">スタッフ</th>' + H.map(h => `<th>${fmt(h)}</th>`).join('') + '</tr></thead><tbody>';
   rows.forEach(s => {
-    const mine = (W[s.id] || []).filter(h => H.includes(h)), sh = dayShifts(k)[s.id], color = roleColor(s.role);
-    const m = shiftOn ? shiftHourList(sh) : mainHours(s), b = shiftOn ? [] : subHours(s), off = adminPref(s.id, k, pk).status === 'off';
-    const cost = hourly(s) * mine.length; total += cost;
+    const sh = dayShifts(k)[s.id], isW = isWork(sh), color = roleColor(s.role), off = adminPref(s.id, k, pk).status === 'off';
+    const w = work[s.id] || [], b = brk[s.id] || [], cells = w.length + b.length;
+    const win = isW ? shiftHourList(sh) : (shiftOn ? [] : mainHours(s)), sub = (!isW && !shiftOn) ? subHours(s) : [];
+    const hrs = manual ? w.length : (isW ? shiftHours(sh) : 0), cost = hourly(s) * hrs; total += cost;
+    const needBrk = manual && cells > 6 && b.length * 60 < legalBreak(cells);   // 法定の休憩が足りない
     html += `<tr><th class="name"><b>${esc(s.name)}</b><div class="meta">${esc(s.role || '役割なし')} ／ <span class="stars">${stars(s.rating)}</span></div>
-      <div class="meta${off ? ' warnText' : ''}">${shiftOn ? hm(sh.start) + '–' + hm(sh.end) + '・' : ''}${mine.length}${s.hours && !shiftOn ? '/' + s.hours : ''}時間${s.wage ? '・' + money(cost) : ''}${off ? '・希望休' : ''}</div></th>`;
+      <div class="meta${off || needBrk ? ' warnText' : ''}">${isW ? hm(sh.start) + '–' + hm(sh.end) + '・' : ''}${fh(hrs)}時間${isW && sh.brk ? '・休憩' + sh.brk + '分' : ''}${s.wage ? '・' + money(cost) : ''}${off ? '・希望休' : ''}${needBrk ? '・⚠休憩が足りません' : ''}</div></th>`;
     H.forEach(h => {
-      const on = mine.includes(h);
-      const cls = on ? 'on' : m.includes(h) ? 'ok' : b.includes(h) ? 'sub' : 'off';
-      html += `<td class="cell ${cls}" data-id="${s.id}" data-h="${h}"${on ? ` style="background:${color}"` : ''}>${on ? '●' : ''}</td>`;
+      const on = w.includes(h), br = b.includes(h);
+      const cls = on || br ? (br ? 'brk' : 'on') : win.includes(h) ? 'ok' : sub.includes(h) ? 'sub' : 'off';
+      html += `<td class="cell ${cls}${manual ? '' : ' view'}" data-id="${s.id}" data-h="${h}"${on ? ` style="background:${color}"` : ''}>${on ? '●' : br ? '休憩' : ''}</td>`;
     });
     html += '</tr>';
   });
-  html += '</tbody><tfoot><tr><th class="name">配置人数<small>最低〜最高</small></th>';
-  H.forEach(h => {
-    const c = rows.filter(s => (W[s.id] || []).includes(h)).length, r = rule(h);
-    html += `<td class="${c < r.min ? 'low' : c > r.max ? 'high' : ''}">${c}<small>${r.min}〜${r.max}</small></td>`;
-  });
+  html += '</tbody><tfoot><tr><th class="name">配置人数<small>最低〜最高（休憩中は除く）</small></th>';
+  H.forEach(h => { const c = rows.filter(s => (work[s.id] || []).includes(h)).length, r = rule(h); html += `<td class="${c < r.min ? 'low' : c > r.max ? 'high' : ''}">${c}<small>${r.min}〜${r.max}</small></td>`; });
   html += '</tr>';
   state.roles.forEach(ro => {
     const q = state.roleRules[ro.name];
     if (!q || (!q.min && q.max == null)) return;
     html += `<tr><th class="name"><span style="color:${ro.color}">●</span> ${esc(ro.name)}の人数<small>${q.min}〜${q.max == null ? '制限なし' : q.max}</small></th>`;
-    H.forEach(h => {
-      const c = rows.filter(s => s.role === ro.name && (W[s.id] || []).includes(h)).length;
-      html += `<td class="${c < q.min ? 'low' : q.max != null && c > q.max ? 'high' : ''}">${c}</td>`;
-    });
+    H.forEach(h => { const c = rows.filter(s => s.role === ro.name && (work[s.id] || []).includes(h)).length; html += `<td class="${c < q.min ? 'low' : q.max != null && c > q.max ? 'high' : ''}">${c}</td>`; });
     html += '</tr>';
   });
   wrap.innerHTML = html + '</tfoot></table>';
@@ -306,28 +357,40 @@ $('#hwPrev').addEventListener('click', () => { stepHome('w', -1); }); $('#hwNext
 $('#hwToday').addEventListener('click', () => { _hw = todayKey(); renderGantt(); });
 $('#hsEdit').addEventListener('click', () => { aP = HSP(); mDay = null; switchTab('shift'); });
 
+/* マスのクリック：働く → 休憩 → なし。連動中の表は、クリックすると手動の調整に切り替わる */
 $('#gantt').addEventListener('click', async e => {
   const td = e.target.closest('.cell[data-id]'); if (!td) return;
-  const id = td.dataset.id, h = +td.dataset.h;
-  const W = ensureWork(HW()), arr = W[id] || (W[id] = []), i = arr.indexOf(h);
-  if (i >= 0) arr.splice(i, 1);
-  else {
-    if (td.classList.contains('off') && !await ui.ask('出勤できる時間の外のマスです。\nこの時間に勤務を追加しますか？', { ok: '追加する' })) return;
-    arr.push(h);
-  }
-  save(); renderGantt(true);
-});
-$('#btnClear').addEventListener('click', async () => {
-  if (await ui.ask(`${mdText(HW())} の作業表をすべて空にします。よろしいですか？`, { ok: '空にする', danger: true })) {
-    state.work[HW()] = {}; save(); renderGantt(); ui.toast('作業表を空にしました');
-  }
+  const k = HW(), id = td.dataset.id, h = +td.dataset.h;
+  if (!td.classList.contains('on') && !td.classList.contains('brk') && td.classList.contains('off') &&
+      !await ui.ask('出勤できる時間の外のマスです。\nこの時間に勤務を入れますか？', { ok: '入れる' })) return;
+  if ((state.workMode[k] || 'shift') !== 'manual') { materialize(k); ui.toast('手動の調整に切り替えました。「シフト通りに作る」で、シフトの時間どおりに戻せます', 'warn'); }
+  const M = state.work[k] || (state.work[k] = {}), x = normW(M[id]);
+  if (x.w.includes(h)) { x.w.splice(x.w.indexOf(h), 1); x.b.push(h); }        // 働く → 休憩
+  else if (x.b.includes(h)) x.b.splice(x.b.indexOf(h), 1);                   // 休憩 → なし
+  else x.w.push(h);                                                          // なし → 働く
+  M[id] = x; save(); renderGantt(true);
 });
 $('#btnFromShift').addEventListener('click', async () => {
   const k = HW();
   if (!hasWork(k)) return ui.toast('この日のシフトがまだありません。先にシフト管理で作成してください', 'warn');
-  if (Object.values(workOf(k)).some(a => a.length) && state.work[k] && !await ui.ask(`${mdText(k)} の作業表を、シフトの内容に作り直します。今の調整は消えます。`, { ok: '作り直す' })) return;
-  state.work[k] = deriveWork(k); save(); renderGantt(); ui.toast('シフト通りに作業表を作りました');
+  if ((state.workMode[k] || 'shift') === 'manual' && !await ui.ask(`${mdText(k)} の手動の調整を消して、シフトの時間どおりに作り直します。`, { ok: '作り直す' })) return;
+  delete state.workMode[k]; delete state.work[k]; save(); renderGantt(); ui.toast('シフトの時間どおりに作業表を作りました（休憩は「休憩」と表示）');
 });
+$('#btnAutoHome').addEventListener('click', async () => {
+  const k = HW();
+  if (!hasWork(k)) return ui.toast('この日のシフトがまだありません。先にシフト管理で作成してください', 'warn');
+  if ((state.workMode[k] || 'shift') === 'manual' && !await ui.ask(`${mdText(k)} の手動の調整を消して、人数ルールで自動作成します。`, { ok: '自動作成する' })) return;
+  state.workMode[k] = 'rules'; delete state.work[k]; save(); renderGantt();
+  const { work } = workDay(k), low = hoursList().filter(h => Object.values(work).filter(a => a.includes(h)).length < rule(h).min);
+  if (low.length) ui.toast(`シフトの時間どおりに作りました。${low.map(fmt).join('、')} は最低人数に届いていません（シフトの人数が足りません）`, 'warn');
+  else ui.toast('シフトの時間どおりに作り、休憩を最低人数が保てる位置に置きました');
+});
+$('#btnClear').addEventListener('click', async () => {
+  const k = HW();
+  if (!await ui.ask(`${mdText(k)} の作業表を空にして、手動で作れる状態にします。`, { ok: '空にする', danger: true })) return;
+  state.workMode[k] = 'manual'; state.work[k] = {}; save(); renderGantt(); ui.toast('作業表を空にしました。マスをクリックして作ってください');
+});
+$('#hwOpen').addEventListener('click', () => { aP = periodOf(parseYmd(HW())); mDay = HW(); switchTab('shift'); });
 
 /* ========== スタッフ登録 ========== */
 function renderStarInput() {
@@ -693,43 +756,6 @@ function solveHours(P, H) {
   return { sch, cnt, roleAt };
 }
 
-/* 作業表（1日分）を、人数ルールにそって自動作成。その日のシフトがあれば、シフトの時間の中で調整する。希望休の人は必ず外す */
-function autoGenerateWork(date) {
-  const R = state.autoRules, H = hoursList(), pk = pkOf(date), shiftOn = hasWork(date);
-  const base = (shiftOn ? state.staff.filter(s => isWork(dayShifts(date)[s.id])) : state.staff).filter(s => adminPref(s.id, date, pk).status !== 'off');
-  const mk = relax => base.map(s => {
-    let main, sub = [];
-    if (shiftOn) main = shiftHourList(dayShifts(date)[s.id]);
-    else {
-      main = mainHours(s); sub = (R.sub === 'never' && !relax) ? [] : subHours(s);
-      const pref = adminPref(s.id, date, pk);
-      if (pref.status === 'time') { const lo = toH(pref.start), hi = toH(pref.end, true); main = main.filter(h => h >= lo && h < hi); sub = sub.filter(h => h >= lo && h < hi); }
-    }
-    return makeP(s, main, sub, (R.target === 'ignore' || relax) ? Infinity : (shiftOn ? main.length : (s.hours || main.length)));
-  });
-  let out = solveHours(mk(false), H);
-  if (R.fix !== 'off' && shortageOf(out.cnt, out.roleAt, H) > 0) {   // 人手不足なら、希望勤務時間・予備の時間をゆるめてやり直す
-    const o2 = solveHours(mk(true), H);
-    if (shortageOf(o2.cnt, o2.roleAt, H) < shortageOf(out.cnt, out.roleAt, H)) out = o2;
-  }
-  const { sch, cnt, roleAt } = out;
-  state.work[date] = sch; save();
-  const roles = state.roles.map(r => [r.name, H.filter(h => (roleAt[h][r.name] || 0) < roleMinOf(r.name)).length]).filter(x => x[1] > 0);
-  return { hours: H.filter(h => cnt[h] < rule(h).min), roles };
-}
-async function runAuto() {
-  if (!state.staff.length) return ui.toast('先にスタッフを登録してください', 'err');
-  const k = HW();
-  if (Object.values(workOf(k)).some(a => a.length) && !await ui.ask(`${mdText(k)} の作業表は上書きされます。自動作成しますか？`, { ok: '自動作成する' })) return;
-  const { hours, roles } = autoGenerateWork(k);
-  renderGantt();
-  const notes = [];
-  if (hours.length) notes.push(`${hours.map(fmt).join('、')} は最低人数に届いていません。`);
-  roles.forEach(([n, c]) => notes.push(`役割「${n}」は${c}時間帯で最低人数に届いていません。`));
-  if (notes.length) ui.toast('作成しました。' + notes.join(''), 'warn');
-  else ui.toast(`作業表を作成しました（${ruleLabel()}）。必要なマスを調整してください`);
-}
-$('#btnAutoHome').addEventListener('click', runAuto);
 
 /* ========== 期間（シフト表の区切り） ========== */
 const DAY_W = 112, DOW = ['日', '月', '火', '水', '木', '金', '土'], DOW_MON = ['月', '火', '水', '木', '金', '土', '日'];
@@ -1192,6 +1218,8 @@ function updateShiftInfo() {
   const hrs = Math.max(0, (tmin(b) - tmin(a) - brk) / 60), s = state.staff.find(x => x.id === editShift.id);
   el.textContent = `実働 ${fh(hrs)}時間` + (s.wage ? `・${money(hrs * hourly(s))}` : '') +
     (hrs > state.settings.limitDay ? `　⚠ 1日の注意ライン（${state.settings.limitDay}時間）を超えています` : '');
+  const need = legalBreak((tmin(b) - tmin(a)) / 60);
+  if (brk < need) el.textContent += `　※法定の休憩（${need}分）が必要なため、保存すると自動で入ります`;
 }
 function setBreak(v) {
   const sel = $('#sBreak'), b = String(v || 0);
@@ -1236,16 +1264,18 @@ $('#sUnset').addEventListener('click', () => {       // 指定を外して、未
   save(); closeShift(); renderShift(); ui.toast('未設定に戻しました');
 });
 $('#sSave').addEventListener('click', () => {
-  const a = getT('sStart'), b = getT('sEnd'), brk = +$('#sBreak').value;
+  const a = getT('sStart'), b = getT('sEnd'); let brk = +$('#sBreak').value;
   if (a === null || b === null) return ui.toast('時刻の形式が正しくありません。9:00 や 0900 のように入力してください', 'err');
   if (!a || !b) return ui.toast('出勤と退勤の時間を入れてください', 'err');
   if (tmin(b) <= tmin(a)) return ui.toast('退勤は出勤より後にしてください', 'err');
   if (brk >= tmin(b) - tmin(a)) return ui.toast('休憩が勤務時間より長くなっています', 'err');
+  const need = legalBreak((tmin(b) - tmin(a)) / 60), bumped = brk < need;   // 法定の最低休憩に足りなければ、自動で入れる
+  if (bumped) brk = need;
   const { id, date } = editShift, pref = adminPref(id, date, pkOf(date));
   (state.shifts[date] = state.shifts[date] || {})[id] = { start: a, end: b, brk };
   save(); closeShift(); renderShift();
   const cf = conflictOf({ start: a, end: b }, pref), note = cf === 'req' ? '（希望休の日です）' : cf === 'out' ? '（希望の時間外です）' : '';
-  ui.toast('シフトを保存しました' + note, note ? 'warn' : '');
+  ui.toast('シフトを保存しました' + note + (bumped ? `（法定の休憩${need}分を入れました）` : ''), note ? 'warn' : '');
 });
 
 /* ========== 従業員画面（仮：従業員を選んで操作） ========== */
@@ -1546,7 +1576,7 @@ $('#dRandomStaff').addEventListener('click', async () => {
   if (!(n >= 1 && n <= 50)) return ui.toast('人数は1〜50で入れてください', 'err');
   const replace = $('#dMode').value === 'replace';
   if (replace && state.staff.length && !await ui.ask(`今のスタッフ${state.staff.length}人と、そのシフト・希望がすべて消えます。入れ替えますか？`, { ok: '入れ替える', danger: true })) return;
-  if (replace) { state.staff = []; state.work = {}; state.shifts = {}; state.prefs = {}; state.published = {}; state.auth.users = state.auth.users.filter(u => u.role !== 'employee'); }
+  if (replace) { state.staff = []; state.work = {}; state.workMode = {}; state.shifts = {}; state.prefs = {}; state.published = {}; state.auth.users = state.auth.users.filter(u => u.role !== 'employee'); }
   const indKey = $('#dInd').value, ind = INDUSTRIES[indKey], apply = !!ind && $('#dApply').checked;
   if (apply) applyIndustry(ind);
   const made = randomStaff(n, indKey); state.staff.push(...made);

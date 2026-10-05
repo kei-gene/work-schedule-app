@@ -58,6 +58,7 @@
           <button type="button" class="btn small" id="hwNext" aria-label="次の日">›</button>
           <button type="button" class="btn small" id="hwToday">今日</button>
         </div>
+        <span id="hwMode" class="pill"></span>
       </div>
       <div class="toolbar">
         <div>
@@ -68,7 +69,8 @@
         <div class="actions">
           <button id="btnFromShift" class="btn">シフト通りに作る</button>
           <button id="btnAutoHome" class="btn primary">人数ルールで自動作成</button>
-          <button id="btnClear" class="btn">この日の作業表を空にする</button>
+          <button id="btnClear" class="btn">空にする</button>
+          <button id="hwOpen" class="btn">シフト管理で開く</button>
         </div>
       </div>
       <div class="sortbar">
@@ -351,7 +353,7 @@
       </div>
       <div class="card">
         <h2>時間帯ごとの人数（最低・最高）</h2>
-        <p class="meta">1日の中の時間帯ごとに、何人いてほしいかを決めます。ホームの「作業表」の人数チェックと、作業表の自動作成に使われます。</p>
+        <p class="meta">1日の中の時間帯ごとに、何人いてほしいかを決めます。ホームの作業表の人数チェックに使われます。作業表の自動作成は、シフトの時間に必ず合わせたうえで、この人数が保てるように休憩の位置を調整します。</p>
         <div class="bulk">
           <b>一括設定</b>
           <div class="bulk-row">
@@ -375,11 +377,11 @@
       </div>
     </div>
     <div class="setcat" data-cat="auto" hidden>
-      <p class="catdesc"><b>自動作成</b>　シフトの自動作成と、作業表の自動作成の、どちらにも共通のルールです。</p>
+      <p class="catdesc"><b>自動作成</b>　シフトの自動作成のルールです。作業表は、できあがったシフトに合わせて自動で作られます。</p>
       <div class="cols">
       <div class="card">
         <h2>自動作成のルール</h2>
-        <p class="meta">シフトの自動作成と、作業表の自動作成の、どちらにも使うルールです。<b>どのタイプでも、希望休は必ず守ります。</b></p>
+        <p class="meta">シフトの自動作成に使うルールです。作業表は、できあがったシフトに合わせて自動で作られます。<b>どのタイプでも、希望休は必ず守ります。</b></p>
         <label>ルールのタイプ<select id="aPreset"></select></label>
         <p id="aDesc" class="meta"></p>
         <div class="row2">
