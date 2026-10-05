@@ -208,6 +208,13 @@
           <select id="dInd"><option value="generic">汎用（今の役割をそのまま使う）</option><option value="restaurant">飲食店モード</option><option value="convenience">コンビニモード</option><option value="supermarket">スーパーモード</option><option value="apparel">アパレルモード</option></select>
         </label>
         <p id="dIndNote" class="meta"></p>
+        <label class="check"><input type="checkbox" id="dAuto" checked> 人数は、必要な人数が足りるまで自動で決める（企業が各時間帯を満たすように採用するイメージ）</label>
+        <div class="row2">
+          <label>店の規模<select id="dScale"><option value="0.6">小規模</option><option value="1" selected>標準</option><option value="1.6">大規模</option></select></label>
+          <label>人員の余裕<select id="dMargin"><option value="1">少なめ（ぎりぎり）</option><option value="1.25" selected>標準</option><option value="1.5">多め（余裕あり）</option></select></label>
+        </div>
+        <p class="meta">「業態」を選び、上の「役割・営業時間・人数ルールも合わせる」をオンにしたときに使えます。オフのときは、上の「人数」で決めます。</p>
+        <p id="dReport" class="meta"></p>
         <label class="check"><input type="checkbox" id="dApply" checked> 役割（階級）・営業時間・人数ルールも、その業態に合わせて入れ替える</label>
         <label class="check"><input type="checkbox" id="dAcct"> 従業員のログインアカウントも発行する（初期パスワードを表示します）</label>
         <div class="actions"><button type="button" class="btn primary" id="dRandomStaff">ランダムで登録する</button></div>
