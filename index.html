@@ -12,7 +12,7 @@
   <nav class="tabs">
     <button class="tab active" data-tab="home"><span class="lg">ホーム</span><span class="sh">ホーム</span></button>
     <button class="tab" data-tab="shift"><span class="lg">シフト管理</span><span class="sh">シフト</span></button>
-    <button class="tab" data-tab="setup"><span class="lg">スタッフ</span><span class="sh">スタッフ</span></button>
+    <button class="tab" data-tab="setup"><span class="lg">従業員</span><span class="sh">従業員</span></button>
     <button class="tab" data-tab="settings"><span class="lg">設定</span><span class="sh">設定</span></button>
   </nav>
   <!-- 画面の切り替え（開発者のログイン時だけ表示されます） -->
@@ -108,7 +108,7 @@
     </div>
     <div id="wRuleNote" class="rulenote"></div>
     <div class="sortbar">
-      <label class="inline">スタッフの並び順<select id="wSort"></select></label>
+      <label class="inline">従業員の並び順<select id="wSort"></select></label>
       <button type="button" class="btn small" id="wDir"></button>
     </div>
     <p class="hint">従業員が提出した希望が表に出ます（<b>休</b>＝希望休、<b>○</b>＝出勤可能、時間＝その時間だけ可能）。マスをクリックしてシフトを入れます。希望休の日に入れるときは確認が出ます。期間の長さは設定タブで変えられます。</p>
@@ -135,7 +135,7 @@
           <button type="button" class="etab" data-etab="rules">設定</button>
         </div>
       </div>
-      <p id="eNone" class="empty" hidden>スタッフがまだ登録されていません。管理者画面で登録してください。</p>
+      <p id="eNone" class="empty" hidden>従業員がまだ登録されていません。管理者画面で登録してください。</p>
       <div id="eBody">
         <div id="eReq">
           <div class="toolbar">
@@ -196,12 +196,12 @@
       <p id="dInfo" class="total"></p>
 
       <div class="card">
-        <h2>ランダムでスタッフを登録</h2>
+        <h2>ランダムで従業員を登録</h2>
         <p class="meta">名前・役割・評価・希望勤務時間・時給（円／ドル）・出退勤時間・予備の時間を、すべてランダムに作ります。役割は、今ある役割から選ばれます。出退勤時間は、設定タブの表示時間の範囲に収まります。</p>
         <div class="row2">
           <label>人数（1〜50）<input type="number" id="dCount" min="1" max="50" value="8"></label>
           <label>登録のしかた
-            <select id="dMode"><option value="add">今のスタッフに追加する</option><option value="replace">今のスタッフをすべて入れ替える</option></select>
+            <select id="dMode"><option value="add">今の従業員に追加する</option><option value="replace">今の従業員をすべて入れ替える</option></select>
           </label>
         </div>
         <label>業態（モード）
@@ -211,7 +211,7 @@
         <label class="check"><input type="checkbox" id="dAuto" checked> 人数は、必要な人数が足りるまで自動で決める（企業が各時間帯を満たすように採用するイメージ）</label>
         <div class="row2">
           <label>店の規模<select id="dScale"><option value="0.6">小規模</option><option value="1" selected>標準</option><option value="1.6">大規模</option></select></label>
-          <label>人員の余裕<select id="dMargin"><option value="1">少なめ（ぎりぎり）</option><option value="1.25" selected>標準</option><option value="1.5">多め（余裕あり）</option></select></label>
+          <label>人員の余裕<select id="dMargin"><option value="0.9">少なめ（ぎりぎり）</option><option value="1.1" selected>標準</option><option value="1.35">多め（余裕あり）</option></select></label>
         </div>
         <p class="meta">「業態」を選び、上の「役割・営業時間・人数ルールも合わせる」をオンにしたときに使えます。オフのときは、上の「人数」で決めます。</p>
         <p id="dReport" class="meta"></p>
@@ -251,7 +251,7 @@
 
       <div class="card">
         <h2>データの初期化</h2>
-        <p class="meta">スタッフ、シフト、希望、アカウント、設定など、このアプリがブラウザに保存しているデータをすべて消して、最初の状態に戻します。</p>
+        <p class="meta">従業員、シフト、希望、アカウント、設定など、このアプリがブラウザに保存しているデータをすべて消して、最初の状態に戻します。</p>
         <div class="actions"><button type="button" class="btn danger" id="dReset">すべてのデータを消す</button></div>
       </div>
     </div>
@@ -259,40 +259,18 @@
 
 
   <section id="setup" class="panel">
-    <div class="cols">
-      <div class="card">
-        <div class="card-head"><h2 id="formTitle">スタッフを登録</h2><button type="button" class="btn small" id="btnBulk">一括登録</button></div>
-        <form id="staffForm" autocomplete="off" novalidate>
-          <label>名前<input type="text" id="fName"></label>
-          <label>役割<select id="fRole"></select></label>
-          <div class="field">評価<div id="fStars" class="stars input"></div></div>
-          <div class="row2">
-            <label>希望勤務時間（時間）<input type="number" id="fHours" min="1" max="24" placeholder="例 6"></label>
-            <label>希望給料（時給）
-              <div class="wage"><input type="number" id="fWage" min="0" step="any" placeholder="例 1100">
-                <select id="fCur"><option value="JPY">円</option><option value="USD">ドル</option></select></div>
-            </label>
-          </div>
-          <div class="row2">
-            <div class="field">出勤時間<div id="fStart"></div></div>
-            <div class="field">退勤時間<div id="fEnd"></div></div>
-          </div>
-          <div class="row2">
-            <div class="field">出勤時間（予備）<div id="fStart2"></div></div>
-            <div class="field">退勤時間（予備）<div id="fEnd2"></div></div>
-          </div>
-          <div class="actions">
-            <button type="submit" class="btn primary" id="fSubmit">登録する</button>
-            <button type="button" class="btn" id="fCancel" hidden>編集をやめる</button>
-          </div>
-        </form>
+    <div class="emhead">
+      <div class="emtools">
+        <input type="search" id="emSearch" placeholder="名前で検索" aria-label="名前で検索">
+        <select id="emRole" aria-label="役割で絞り込み"></select>
+        <span id="emCount" class="meta"></span>
       </div>
-      <div class="card">
-        <h2>登録済みスタッフ</h2>
-        <ul id="staffList" class="staff-list"></ul>
+      <div class="actions">
+        <button type="button" class="btn primary" id="emAdd">＋ 従業員を追加</button>
+        <button type="button" class="btn" id="btnBulk">一括登録</button>
       </div>
-
     </div>
+    <div class="card tablecard"><div class="tscroll"><div id="staffList"></div></div></div>
   </section>
 
   <section id="settings" class="panel">
@@ -399,15 +377,25 @@
           <label>勤務時間の公平さ<select id="aFair"></select></label>
         </div>
         <label>余裕のある時間帯の人数<select id="aFill"></select></label>
-        <label>希望勤務時間の扱い<select id="aTarget"></select></label>
+        <label>出勤できる時間の使い方<select id="aTarget"></select></label>
         <label>予備の出退勤時間<select id="aSub"></select></label>
         <label>人手が足りないときの対応<select id="aFix"></select></label>
       </div>
       </div>
     </div>
     <div class="setcat" data-cat="common" hidden>
-      <p class="catdesc"><b>共通</b>　役割（階級）や通貨など、アプリ全体に関わる設定です。</p>
+      <p class="catdesc"><b>共通</b>　役割（階級）・最低賃金・通貨など、アプリ全体に関わる設定です。</p>
       <div class="cols">
+      <div class="card" id="mwCard">
+        <h2>最低賃金（時給）</h2>
+        <p class="meta">従業員の時給は、管理者が決めます。時給を空欄にした従業員は、ここで決めた最低賃金で人件費を計算します。</p>
+        <div class="row2">
+          <label>地域<input type="text" id="mwArea" placeholder="例 大阪府" maxlength="20"></label>
+          <label>最低賃金（円／時間）<input type="number" id="mwVal" min="0" step="1"></label>
+        </div>
+        <p id="mwNote" class="meta"></p>
+        <p class="meta">初期値は、大阪府の地域別最低賃金（令和8年10月1日から 1,231円）です。大阪労働局の案内「大阪府最低賃金は、令和8年10月1日から時間額1,231円に改正されます」で確認しています。最低賃金は都道府県ごとに違い、毎年改定されます。お店がある都道府県の額を、厚生労働省や各都道府県の労働局の案内で確かめて、入れてください。</p>
+      </div>
       <div class="card">
         <h2>役割（階級）の管理</h2>
         <p class="meta">並び順が階級の順です（上ほど上位）。シフト管理の「階級順」の並び替えや、ホームの「役割別」に使われます。</p>
@@ -429,7 +417,7 @@
           <div class="wage"><input type="number" id="sRate" min="0.01" step="0.01"><button type="button" class="btn" id="sFetch">今すぐ更新</button></div>
         </label>
         <p id="rateStatus" class="meta"></p>
-        <p class="meta">スタッフごとに時給を円・ドルのどちらでも入力でき、人件費は表示通貨に換算して集計します。自動取得をオフにすると、レートを手入力できます。</p>
+        <p class="meta">従業員ごとに時給を円・ドルのどちらでも入力でき、人件費は表示通貨に換算して集計します。自動取得をオフにすると、レートを手入力できます。</p>
       </div>
       </div>
     </div>
@@ -455,6 +443,35 @@
       <button id="modalCancel" class="btn">キャンセル</button>
       <button id="modalOk" class="btn primary">OK</button>
     </div>
+  </div>
+</div>
+
+<div id="empModal" class="modal" hidden>
+  <div class="dialog wide pop" role="dialog" aria-modal="true" aria-labelledby="formTitle">
+    <h2 id="formTitle">従業員を登録</h2>
+    <form id="staffForm" autocomplete="off" novalidate>
+      <div class="row2">
+        <label>名前<input type="text" id="fName"></label>
+        <label>役割（階級）<select id="fRole"></select></label>
+      </div>
+      <div class="row2">
+        <div class="field">評価<div id="fStars" class="stars input"></div></div>
+        <label>時給（管理者が設定）
+          <div class="wage"><input type="number" id="fWage" min="0" step="any" placeholder="空欄なら最低賃金">
+            <select id="fCur"><option value="JPY">円</option><option value="USD">ドル</option></select></div>
+          <span id="fWageNote" class="wnote"></span>
+        </label>
+      </div>
+      <div class="field">出勤できる曜日と時間
+        <div id="fSlots" class="slots"></div>
+        <button type="button" class="btn small" id="fSlotAdd">＋ 追加</button>
+        <p class="meta">曜日を選んで、時間を入れます。曜日や時間帯が違うときは「＋ 追加」で増やせます。「予備」は、人手が足りないときだけ使う時間です。</p>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn" id="fCancel">キャンセル</button>
+        <button type="submit" class="btn primary" id="fSubmit">登録する</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -487,11 +504,11 @@
 
 <div id="bulkModal" class="modal" hidden>
   <div class="dialog wide" role="dialog" aria-modal="true" aria-labelledby="bulkTitle">
-    <h2 id="bulkTitle">スタッフを一括登録</h2>
-    <p class="meta">Excel やスプレッドシートからコピーして貼り付けるか、CSV ファイルを選んでください。1行に1人で、列は次の順です。同じ名前のスタッフは上書きされます。</p>
-    <code>名前, 役割, 評価(1〜5), 希望勤務時間, 希望給料, 出勤, 退勤, 予備出勤, 予備退勤</code>
-    <p class="meta">希望給料は「1100」「$15」「15ドル」のように書けます（数字だけなら円）。時刻は「9:00」「0900」など。役割以降は空欄でも構いません。</p>
-    <textarea id="bulkText" rows="9" spellcheck="false" placeholder="田中太郎,レジ,4,6,1100,9:00,15:00,15:00,18:00"></textarea>
+    <h2 id="bulkTitle">従業員を一括登録</h2>
+    <p class="meta">Excel やスプレッドシートからコピーして貼り付けるか、CSV ファイルを選んでください。1行に1人で、列は次の順です。同じ名前の従業員は上書きされます。</p>
+    <code>名前, 役割, 評価(1〜5), 時給（空欄なら最低賃金）, 出勤できる曜日と時間</code>
+    <p class="meta">出勤できる曜日と時間は「月火水木金 9:00-15:00; 土日 12:00-18:00」のように書きます（「;」で区切ると、時間帯をいくつでも書けます。「毎日」「平日」「週末」も使えます。後ろに「（予備）」を付けると予備の時間）。時給は、空欄なら最低賃金になります。</p>
+    <textarea id="bulkText" rows="9" spellcheck="false" placeholder="田中太郎,レジ,4,,月火水木金 9:00-15:00; 土日 12:00-18:00"></textarea>
     <div class="bulk-tools">
       <input type="file" id="bulkFile" accept=".csv,.tsv,.txt">
       <button type="button" class="btn small" id="bulkSample">入力例を入れる</button>

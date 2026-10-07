@@ -6,12 +6,12 @@ const DEF_ROLES = [['レジ', '#0f6e6e'], ['接客', '#3b6fb6'], ['品出し', '
   .map(([name, color]) => ({ name, color }));
 /* 自動作成のルール（プリセット）。数値は 0=オフ 1=弱 2=標準 3=強 */
 const PRESETS = {
-  balance:   { label: 'バランス重視', desc: '人手不足を作らないことを最優先にします。希望休と、希望時間の外には入れません。希望した人を全員入れる必要はなく、最低人数と最高人数の間で、スタッフ間の勤務日数・時間をなるべく揃えながらバランスよく組みます。足りないときは、希望勤務時間や予備の時間をゆるめて補います。迷ったらこれがおすすめです。', v: { rating: 2, contig: 2, wage: 1, fair: 3, fill: 'mid', target: 'cap', sub: 'fallback', fix: 'flex' } },
-  headcount: { label: '人数重視', desc: '希望勤務時間にこだわらず、各時間帯を最高人数に近づけます。繁忙期や人手不足の日向けです。', v: { rating: 1, contig: 1, wage: 0, fair: 1, fill: 'max', target: 'ignore', sub: 'always', fix: 'flex' } },
-  cost:      { label: '人件費重視', desc: '最低人数だけを満たし、時給の安いスタッフを優先します。予備の時間は使いません。', v: { rating: 1, contig: 2, wage: 3, fair: 0, fill: 'min', target: 'cap', sub: 'never', fix: 'off' } },
-  quality:   { label: '評価重視', desc: '評価の高いスタッフを優先して配置します。忙しい時間帯の品質を上げたいときに。', v: { rating: 3, contig: 2, wage: 0, fair: 0, fill: 'mid', target: 'fill', sub: 'fallback', fix: 'flex' } },
-  fair:      { label: '公平重視', desc: 'スタッフ間の勤務時間をなるべく揃えます。希望時間を超えては入れません。', v: { rating: 1, contig: 2, wage: 1, fair: 3, fill: 'mid', target: 'cap', sub: 'fallback', fix: 'off' } },
-  wish:      { label: '希望優先', desc: '希望勤務時間と本来の出退勤時間を最優先し、予備の時間は使いません。', v: { rating: 1, contig: 2, wage: 0, fair: 1, fill: 'max', target: 'fill', sub: 'never', fix: 'off' } }
+  balance:   { label: 'バランス重視', desc: '人手不足を作らないことを最優先にします。希望休と、希望時間の外には入れません。希望した人を全員入れる必要はなく、最低人数と最高人数の間で、従業員間の勤務日数・時間をなるべく揃えながらバランスよく組みます。足りないときは、予備の時間や休みの日をゆるめて補います。迷ったらこれがおすすめです。', v: { rating: 2, contig: 2, wage: 1, fair: 3, fill: 'mid', target: 'cap', sub: 'fallback', fix: 'flex' } },
+  headcount: { label: '人数重視', desc: '出勤できる時間の長さにこだわらず、各時間帯を最高人数に近づけます。繁忙期や人手不足の日向けです。', v: { rating: 1, contig: 1, wage: 0, fair: 1, fill: 'max', target: 'ignore', sub: 'always', fix: 'flex' } },
+  cost:      { label: '人件費重視', desc: '最低人数だけを満たし、時給の安い従業員を優先します。予備の時間は使いません。', v: { rating: 1, contig: 2, wage: 3, fair: 0, fill: 'min', target: 'cap', sub: 'never', fix: 'off' } },
+  quality:   { label: '評価重視', desc: '評価の高い従業員を優先して配置します。忙しい時間帯の品質を上げたいときに。', v: { rating: 3, contig: 2, wage: 0, fair: 0, fill: 'mid', target: 'fill', sub: 'fallback', fix: 'flex' } },
+  fair:      { label: '公平重視', desc: '従業員間の勤務時間をなるべく揃えます。希望時間を超えては入れません。', v: { rating: 1, contig: 2, wage: 1, fair: 3, fill: 'mid', target: 'cap', sub: 'fallback', fix: 'off' } },
+  wish:      { label: '希望優先', desc: '希望の曜日・時間を最優先し、予備の時間は使いません。', v: { rating: 1, contig: 2, wage: 0, fair: 1, fill: 'max', target: 'fill', sub: 'never', fix: 'off' } }
 };
 const $ = s => document.querySelector(s);
 
@@ -25,14 +25,14 @@ function load() {
   if (!s || !Array.isArray(s.staff)) s = { staff: [], open: 9, close: 22, rules: {}, schedule: {} };
   s.roles = s.roles || DEF_ROLES;
   s.autoRules = s.autoRules || { preset: 'balance', ...PRESETS.balance.v };
-  s.shifts = s.shifts || {};        // { 日付: { スタッフID: { start, end, brk(休憩分) } } }
+  s.shifts = s.shifts || {};        // { 日付: { 従業員ID: { start, end, brk(休憩分) } } }
   s.published = s.published || {};  // { 週の月曜日の日付: true }（確定済みの週）
   s.roleRules = s.roleRules || {};   // { 役割名: { min, max(null=上限なし) } }
   s.auth = s.auth || { users: [], lock: {}, recovery: null };   // ログインのアカウント（パスワードは塩つきハッシュ）
   if (s.autoRules && s.autoRules.fix === 'all') s.autoRules.fix = 'flex';   // 「時間指定までゆるめる」は廃止（希望時間の外には入れない）
   s.deadlines = s.deadlines || {};  // { 期間の開始日: 提出締切の日付 }
   s.closed = s.closed || {};        // { 期間の開始日: true }（管理者が手動で受付を締め切った期間）
-  s.work = s.work || {};            // 作業表 { 日付: { スタッフID: [時間, ...] } }
+  s.work = s.work || {};            // 作業表 { 日付: { 従業員ID: [時間, ...] } }
   s.shiftRules = s.shiftRules || []; // 日ごとの人数ルール [{ day, month, date, min, max }]
   if (s.schedule && Object.values(s.schedule).some(a => a && a.length) && !Object.keys(s.work).length) {   // 日付のなかった旧データは、今日の分に引き継ぐ
     const n = new Date(); s.work[`${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`] = s.schedule;
@@ -45,10 +45,20 @@ function load() {
   if (!s.settings.sort) s.settings.sort = { key: 'manual', desc: false };
   if (s.settings.limitDay === undefined) { s.settings.limitDay = 8; s.settings.limitWeek = 40; }
   if (s.settings.maxStreak === undefined) s.settings.maxStreak = 6;
+  if (!s.settings.minWage) { s.settings.minWage = 1231; s.settings.minWageArea = '大阪府'; }   // 最低賃金：大阪府（令和8年10月1日〜）。設定で変えられる
+  if (s.settings.sort && s.settings.sort.key === 'shortage') s.settings.sort = { key: 'manual', desc: false };
+  s.staff.forEach(x => {
+    if (!x.avail) {
+      x.avail = [];
+      if (x.start && x.end) x.avail.push({ days: [0, 1, 2, 3, 4, 5, 6], start: x.start, end: x.end, kind: 'main' });
+      if (x.start2 && x.end2) x.avail.push({ days: [0, 1, 2, 3, 4, 5, 6], start: x.start2, end: x.end2, kind: 'sub' });
+    }
+    delete x.start; delete x.end; delete x.start2; delete x.end2; delete x.hours;
+  });
   if (s.settings.deadlineDays === undefined) s.settings.deadlineDays = 0;   // 締切の初期値（期間の開始日の何日前。0=設定しない）
   if (!s.settings.layout) s.settings.layout = 'auto';
   if (!s.settings.shiftSort) s.settings.shiftSort = { key: 'role', desc: false };   // シフト管理の並び順（はじめは階級順）
-  s.prefs = s.prefs || {};          // 従業員の希望 { スタッフID: { dates, rules, comments, submissions } }
+  s.prefs = s.prefs || {};          // 従業員の希望 { 従業員ID: { dates, rules, comments, submissions } }
   if (!s.settings.period) {
     const n = new Date(), m = new Date(n.getFullYear(), n.getMonth(), n.getDate() - ((n.getDay() + 6) % 7));
     s.settings.period = { mode: 'month', startDay: 1, weeks: 2, anchor: `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}-${String(m.getDate()).padStart(2, '0')}` };
@@ -76,8 +86,12 @@ function span(a, b) {
   for (let h = x; h < y; h++) r.push(h);
   return r;
 }
-const mainHours = s => span(s.start, s.end);
-const subHours = s => span(s.start2, s.end2);
+/* 出勤できる曜日と時間：s.avail = [{ days:[曜日0〜6], start, end, kind:'main'（希望）|'sub'（予備） }, ...]。日付を渡すと、その曜日の分だけ */
+const slotDays = x => x.days || [0, 1, 2, 3, 4, 5, 6];
+const slotHours = x => span(x.start, x.end);
+const availOn = (s, k) => (s.avail || []).filter(x => k == null || slotDays(x).includes(parseYmd(k).getDay()));
+const mainHours = (s, k) => [...new Set(availOn(s, k).filter(x => x.kind !== 'sub').flatMap(slotHours))].sort((a, b) => a - b);
+const subHours = (s, k) => { const m = new Set(mainHours(s, k)); return [...new Set(availOn(s, k).filter(x => x.kind === 'sub').flatMap(slotHours))].filter(h => !m.has(h)).sort((a, b) => a - b); };
 
 /* ========== 独自の通知・確認UI ========== */
 const ui = {
@@ -106,7 +120,8 @@ const ui = {
 /* ========== 金額 ========== */
 const toDisp = (amt, cur) => cur === state.settings.display ? amt : cur === 'USD' ? amt * state.settings.rate : amt / state.settings.rate;
 const money = v => state.settings.display === 'USD' ? '$' + v.toFixed(2) : Math.round(v).toLocaleString() + '円';
-const hourly = s => toDisp(s.wage, s.cur || 'JPY');
+const effWage = s => s.wage > 0 ? s.wage : state.settings.minWage;   // 時給は管理者が決める。空欄（0）の人は最低賃金
+const hourly = s => toDisp(effWage(s), s.wage > 0 ? (s.cur || 'JPY') : 'JPY');
 
 /* ========== 時刻入力（直接入力 ＋ 選択） ========== */
 /* 「9:00」「900」「0900」「9時30分」などを HH:MM に整える。空は ''、不正は null */
@@ -159,7 +174,7 @@ function timeField(id) {
 }
 const getT = id => parseT($('#' + id + ' input').value);
 const setT = (id, t) => { const i = $('#' + id + ' input'); i.value = t || ''; i.classList.remove('bad'); };
-['fStart', 'fEnd', 'fStart2', 'fEnd2', 'sStart', 'sEnd', 'eFrom', 'eTo'].forEach(timeField);
+['sStart', 'sEnd', 'eFrom', 'eTo'].forEach(timeField);
 
 /* ========== タブ ========== */
 let curTab = 'home';
@@ -169,7 +184,7 @@ function switchTab(name) {
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === name));
   if (name === 'home') renderGantt();
   if (name === 'shift') renderShift();
-  if (name === 'settings') { renderSetCat(); renderShiftRules(); renderAccounts(); }
+  if (name === 'settings') { renderSetCat(); renderShiftRules(); renderAccounts(); renderMinWage(); }
 }
 document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
@@ -180,7 +195,6 @@ const SORTS = {
   start:    { label: '出勤時間順', desc: false },
   rating:   { label: '評価', desc: true },
   hours:    { label: '勤務時間の長さ', desc: true },
-  shortage: { label: '希望時間との不足', desc: true },
   wage:     { label: '時給', desc: true },
   name:     { label: '名前（あいうえお）', desc: false }
 };
@@ -190,7 +204,6 @@ const SORT_VAL = {
   start: s => { const m = mineOf(s); return m.length ? Math.min(...m) : 100 + (mainHours(s)[0] ?? 99); }, // 勤務なしは最後
   rating: s => s.rating,
   hours: s => mineOf(s).length,
-  shortage: s => (s.hours || mainHours(s).length) - mineOf(s).length,
   wage: s => hourly(s),
   name: s => s.name
 };
@@ -290,7 +303,7 @@ function renderHomeShift() {
   $('#hsLabel').textContent = pLabel(p); $('#hsLabel').className = lack.length ? 'lack' : '';
   $('#hsStatus').textContent = !rec ? '未作成' : pub ? '確定済み' : '下書き'; $('#hsStatus').className = 'pill' + (rec && pub ? ' ok' : '');
   note.innerHTML = '';
-  if (!state.staff.length) { wrap.innerHTML = '<div class="empty">スタッフがまだいません。「スタッフ」タブから登録してください。</div>'; return; }
+  if (!state.staff.length) { wrap.innerHTML = '<div class="empty">従業員がまだいません。「従業員」タブから登録してください。</div>'; return; }
   if (!rec) { wrap.innerHTML = '<div class="empty">この期間のシフトは、まだ作成されていません。「シフト管理で開く」から作成できます。</div>'; return; }
   renderShiftDesktop(keys, pk, wrap, true);   // シフト管理と同じ表（見るだけ）
   let tot = 0; state.staff.forEach(s => keys.forEach(k => { tot += shiftHours(dayShifts(k)[s.id]); }));
@@ -312,21 +325,21 @@ function renderWork(keep) {
     : 'この日のシフトに合わせて自動で作られています（シフトを変えると、この表も変わります）。マスをクリックすると、手動の調整に切り替わります。6時間を超える勤務には、法律で決まっている休憩を「休憩」として入れています。';
   $('#btnFromShift').disabled = !shiftOn; $('#btnAutoHome').disabled = !shiftOn;
   if (!state.staff.length || (!shiftOn && !manual)) {
-    wrap.innerHTML = `<div class="empty">${state.staff.length ? 'この日のシフトがまだありません。シフトを作ると、この表が自動で作られます。手動で作るときは「空にする」を押してください。' : 'スタッフがまだいません。「スタッフ」タブから登録してください。'}</div>`;
+    wrap.innerHTML = `<div class="empty">${state.staff.length ? 'この日のシフトがまだありません。シフトを作ると、この表が自動で作られます。手動で作るときは「空にする」を押してください。' : '従業員がまだいません。「従業員」タブから登録してください。'}</div>`;
     $('#total').textContent = ''; return;
   }
   const rank = new Map(sortedStaff().map((s, i) => [s.id, i]));
   const rows = state.staff.filter(s => shiftOn ? (isWork(dayShifts(k)[s.id]) || (work[s.id] || []).length || (brk[s.id] || []).length) : true).sort((a, b) => rank.get(a.id) - rank.get(b.id));
   let total = 0;
-  let html = '<table class="gantt" style="width:' + (D.n + H.length * D.c) + 'px"><colgroup><col style="width:' + D.n + 'px">' + H.map(() => `<col style="width:${D.c}px">`).join('') + '</colgroup><thead><tr><th class="name">スタッフ</th>' + H.map(h => `<th>${fmt(h)}</th>`).join('') + '</tr></thead><tbody>';
+  let html = '<table class="gantt" style="width:' + (D.n + H.length * D.c) + 'px"><colgroup><col style="width:' + D.n + 'px">' + H.map(() => `<col style="width:${D.c}px">`).join('') + '</colgroup><thead><tr><th class="name">従業員</th>' + H.map(h => `<th>${fmt(h)}</th>`).join('') + '</tr></thead><tbody>';
   rows.forEach(s => {
     const sh = dayShifts(k)[s.id], isW = isWork(sh), color = roleColor(s.role), off = adminPref(s.id, k, pk).status === 'off';
     const w = work[s.id] || [], b = brk[s.id] || [], cells = w.length + b.length;
-    const win = isW ? shiftHourList(sh) : (shiftOn ? [] : mainHours(s)), sub = (!isW && !shiftOn) ? subHours(s) : [];
+    const win = isW ? shiftHourList(sh) : (shiftOn ? [] : mainHours(s, k)), sub = (!isW && !shiftOn) ? subHours(s, k) : [];
     const hrs = manual ? w.length : (isW ? shiftHours(sh) : 0), cost = hourly(s) * hrs; total += cost;
     const needBrk = manual && cells > 6 && b.length * 60 < legalBreak(cells);   // 法定の休憩が足りない
     html += `<tr><th class="name"><b>${esc(s.name)}</b><div class="meta">${esc(s.role || '役割なし')} ／ <span class="stars">${stars(s.rating)}</span></div>
-      <div class="meta${off || needBrk ? ' warnText' : ''}">${isW ? hm(sh.start) + '–' + hm(sh.end) + '・' : ''}${fh(hrs)}時間${isW && sh.brk ? '・休憩' + sh.brk + '分' : ''}${s.wage ? '・' + money(cost) : ''}${off ? '・希望休' : ''}${needBrk ? '・⚠休憩が足りません' : ''}</div></th>`;
+      <div class="meta${off || needBrk ? ' warnText' : ''}">${isW ? hm(sh.start) + '–' + hm(sh.end) + '・' : ''}${fh(hrs)}時間${isW && sh.brk ? '・休憩' + sh.brk + '分' : ''}・${money(cost)}${off ? '・希望休' : ''}${needBrk ? '・⚠休憩が足りません' : ''}</div></th>`;
     H.forEach(h => {
       const on = w.includes(h), br = b.includes(h);
       const cls = on || br ? (br ? 'brk' : 'on') : win.includes(h) ? 'ok' : sub.includes(h) ? 'sub' : 'off';
@@ -393,7 +406,14 @@ $('#btnClear').addEventListener('click', async () => {
 });
 $('#hwOpen').addEventListener('click', () => { aP = periodOf(parseYmd(HW())); mDay = HW(); switchTab('shift'); });
 
-/* ========== スタッフ登録 ========== */
+/* ========== 従業員の登録（一覧・追加・編集） ========== */
+const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];   // 月〜日
+const daysText = ds => { const set = new Set(ds), n = set.size; return n === 7 ? '毎日' : (n === 5 && [1, 2, 3, 4, 5].every(d => set.has(d))) ? '平日' : (n === 2 && set.has(6) && set.has(0)) ? '週末' : DAY_ORDER.filter(d => set.has(d)).map(d => DOW[d]).join(''); };
+const availText = s => (s.avail || []).length ? s.avail.map(x => `${daysText(slotDays(x))} ${hm(x.start)}–${hm(x.end)}${x.kind === 'sub' ? '（予備）' : ''}`).join('／') : '未設定';
+const wageText = s => s.wage > 0 ? (s.cur === 'USD' ? '$' + s.wage : s.wage.toLocaleString() + '円') : `最低賃金（${state.settings.minWage.toLocaleString()}円）`;
+const belowMin = s => s.wage > 0 && (s.cur || 'JPY') === 'JPY' && s.wage < state.settings.minWage;
+let slotDraft = [];
+
 function renderStarInput() {
   $('#fStars').innerHTML = [1, 2, 3, 4, 5].map(n => `<span data-n="${n}" class="${n <= formRating ? 'on' : ''}" role="button" aria-label="評価${n}">★</span>`).join('');
 }
@@ -405,60 +425,101 @@ function renderRoleSelect() {
   sel.value = state.roles.some(r => r.name === cur) ? cur : '';
 }
 
+/* 出勤できる曜日と時間：曜日をえらび、時間を入れる。「＋ 追加」で、時間帯をいくつでも増やせる */
+function renderSlots() {
+  $('#fSlots').innerHTML = slotDraft.length ? slotDraft.map((x, i) => `<div class="slot">
+    <div class="sl-days">${DAY_ORDER.map(d => `<button type="button" class="dchip${d === 6 ? ' sat' : d === 0 ? ' sun' : ''}${x.days.includes(d) ? ' on' : ''}" data-i="${i}" data-d="${d}" aria-pressed="${x.days.includes(d)}">${DOW[d]}</button>`).join('')}
+      <span class="sl-quick"><button type="button" class="btn small" data-i="${i}" data-q="all">毎日</button><button type="button" class="btn small" data-i="${i}" data-q="weekday">平日</button><button type="button" class="btn small" data-i="${i}" data-q="weekend">週末</button></span></div>
+    <div class="sl-time"><div id="slS${i}"></div><span>〜</span><div id="slE${i}"></div>
+      <select data-i="${i}" data-k="kind"><option value="main"${x.kind !== 'sub' ? ' selected' : ''}>希望</option><option value="sub"${x.kind === 'sub' ? ' selected' : ''}>予備</option></select>
+      <button type="button" class="btn small" data-i="${i}" data-sdel="1">削除</button></div></div>`).join('')
+    : '<p class="meta">時間帯がまだありません。「＋ 追加」から入れてください。</p>';
+  slotDraft.forEach((x, i) => { timeField('slS' + i); timeField('slE' + i); setT('slS' + i, x.start); setT('slE' + i, x.end); });
+}
+$('#fSlots').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || b.dataset.i == null) return;
+  const x = slotDraft[+b.dataset.i];
+  if (b.dataset.d != null) { const d = +b.dataset.d; x.days = x.days.includes(d) ? x.days.filter(v => v !== d) : [...x.days, d]; }
+  else if (b.dataset.q) x.days = b.dataset.q === 'all' ? [...DAY_ORDER] : b.dataset.q === 'weekday' ? [1, 2, 3, 4, 5] : [6, 0];
+  else if (b.dataset.sdel) slotDraft.splice(+b.dataset.i, 1);
+  else return;
+  renderSlots();
+});
+$('#fSlots').addEventListener('change', e => { if (e.target.dataset.k === 'kind') slotDraft[+e.target.dataset.i].kind = e.target.value; });
+$('#fSlots').addEventListener('tchange', e => {
+  const m = /^sl([SE])(\d+)$/.exec(e.target.id); if (!m || !slotDraft[+m[2]]) return;
+  slotDraft[+m[2]][m[1] === 'S' ? 'start' : 'end'] = getT(e.target.id) || '';
+});
+$('#fSlotAdd').addEventListener('click', () => { slotDraft.push({ days: slotDraft.length ? [] : [...DAY_ORDER], start: '09:00', end: '17:00', kind: 'main' }); renderSlots(); });
+
+function updateWageNote() {
+  const v = +$('#fWage').value, cur = $('#fCur').value, min = state.settings.minWage;
+  $('#fWageNote').textContent = !(v > 0) ? `空欄のときは、最低賃金（${min.toLocaleString()}円）で計算します` : (cur === 'JPY' && v < min) ? `⚠ 最低賃金（${min.toLocaleString()}円）を下回っています` : '';
+}
+['input', 'change'].forEach(ev => { $('#fWage').addEventListener(ev, updateWageNote); $('#fCur').addEventListener(ev, updateWageNote); });
+
+const empEl = $('#empModal');
+function openEmp(id) {
+  editingId = id;
+  const s = id ? state.staff.find(x => x.id === id) : null;
+  formRating = s ? s.rating : 3;
+  renderRoleSelect();
+  $('#fName').value = s ? s.name : ''; $('#fRole').value = s ? s.role : '';
+  $('#fWage').value = s && s.wage > 0 ? s.wage : ''; $('#fCur').value = s ? (s.cur || 'JPY') : 'JPY';
+  slotDraft = s ? JSON.parse(JSON.stringify(s.avail || [])) : [{ days: [...DAY_ORDER], start: '09:00', end: '17:00', kind: 'main' }];
+  $('#formTitle').textContent = s ? '従業員を編集' : '従業員を登録'; $('#fSubmit').textContent = s ? '変更を保存' : '登録する';
+  renderStarInput(); renderSlots(); updateWageNote();
+  empEl.hidden = false; $('#fName').focus();
+}
+const closeEmp = () => { empEl.hidden = true; editingId = null; };
+const resetForm = closeEmp;
+empEl.addEventListener('click', e => { if (e.target === empEl) closeEmp(); });
+empEl.addEventListener('keydown', e => { if (e.key === 'Escape') closeEmp(); });
+$('#fCancel').addEventListener('click', closeEmp);
+$('#emAdd').addEventListener('click', () => openEmp(null));
+
 $('#staffForm').addEventListener('submit', e => {
   e.preventDefault();
-  const d = {
-    name: $('#fName').value.trim(), role: $('#fRole').value, rating: formRating,
-    hours: +$('#fHours').value || 0, wage: +$('#fWage').value || 0, cur: $('#fCur').value,
-    start: getT('fStart'), end: getT('fEnd'), start2: getT('fStart2'), end2: getT('fEnd2')
-  };
-  if (!d.name) return ui.toast('名前を入力してください', 'err');
-  if ([d.start, d.end, d.start2, d.end2].includes(null)) return ui.toast('時刻の形式が正しくありません。9:00 や 0900 のように入力してください', 'err');
-  if (!d.start || !d.end) return ui.toast('出勤時間と退勤時間を選んでください', 'err');
-  if (toH(d.end, true) <= toH(d.start)) return ui.toast('退勤時間は出勤時間より後にしてください', 'err');
-  if (!d.start2 !== !d.end2) return ui.toast('予備の出勤・退勤時間は両方選んでください', 'err');
-  if (d.start2 && toH(d.end2, true) <= toH(d.start2)) return ui.toast('予備の退勤時間は出勤時間より後にしてください', 'err');
+  slotDraft.forEach((x, i) => { x.start = getT('slS' + i); x.end = getT('slE' + i); });   // いま入力中の時刻も読み取る
+  const name = $('#fName').value.trim(), wage = +$('#fWage').value || 0, cur = $('#fCur').value;
+  if (!name) return ui.toast('名前を入力してください', 'err');
+  if (state.staff.some(s => s.name === name && s.id !== editingId)) return ui.toast('同じ名前の従業員がすでにいます。区別できる名前にしてください', 'err');
+  if (wage > 0 && cur === 'JPY' && wage < state.settings.minWage) return ui.toast(`時給は最低賃金（${state.settings.minWage.toLocaleString()}円）以上にしてください。空欄なら最低賃金になります`, 'err');
+  if (!slotDraft.length) return ui.toast('出勤できる曜日と時間を、1つ以上入れてください', 'err');
+  for (const x of slotDraft) {
+    if (x.start === null || x.end === null) return ui.toast('時刻の形式が正しくありません。9:00 や 0900 のように入力してください', 'err');
+    if (!x.days.length) return ui.toast('曜日を1つ以上えらんでください', 'err');
+    if (!x.start || !x.end) return ui.toast('出勤と退勤の時間を入れてください', 'err');
+    if (toH(x.end, true) <= toH(x.start)) return ui.toast('退勤は出勤より後にしてください', 'err');
+  }
+  const d = { name, role: $('#fRole').value, rating: formRating, wage, cur, avail: slotDraft.map(x => ({ days: DAY_ORDER.filter(v => x.days.includes(v)), start: x.start, end: x.end, kind: x.kind === 'sub' ? 'sub' : 'main' })) };
   if (editingId) { Object.assign(state.staff.find(s => s.id === editingId), d); ui.toast('変更を保存しました'); }
-  else { state.staff.push({ id: 's' + Date.now(), ...d }); ui.toast(`${d.name}さんを登録しました`); }
-  save(); resetForm(); renderStaffList(); renderGantt(); renderRoles();
+  else { state.staff.push({ id: 's' + Date.now(), ...d }); ui.toast(`${name}さんを登録しました`); }
+  save(); closeEmp(); renderStaffList(); renderGantt(); renderRoles();
 });
-$('#fCancel').addEventListener('click', resetForm);
-
-function resetForm() {
-  editingId = null; formRating = 3;
-  $('#staffForm').reset();
-  setT('fStart', '09:00'); setT('fEnd', '17:00'); setT('fStart2', ''); setT('fEnd2', '');
-  $('#formTitle').textContent = 'スタッフを登録';
-  $('#fSubmit').textContent = '登録する';
-  $('#fCancel').hidden = true;
-  renderStarInput();
-}
 
 function renderStaffList() {
-  const ul = $('#staffList');
-  if (!state.staff.length) { ul.innerHTML = '<li class="meta">まだ登録がありません。上のフォームから追加してください。</li>'; return; }
-  ul.innerHTML = state.staff.map(s => `
-    <li><div class="info">
-      <b>${esc(s.name)}</b>${s.role ? ` <span class="badge" style="background:${roleColor(s.role)}">${esc(s.role)}</span>` : ''}
-      <span class="stars">${stars(s.rating)}</span>
-      <div class="meta">${s.start}–${s.end}${s.start2 ? '（予備 ' + s.start2 + '–' + s.end2 + '）' : ''}
-        ／ 希望${s.hours || '指定なし'}時間 ／ ${s.wage ? (s.cur === 'USD' ? '$' + s.wage : s.wage.toLocaleString() + '円') + '/時' : '給料指定なし'}</div></div>
-      <button class="btn small" data-edit="${s.id}">編集</button>
-      <button class="btn small" data-del="${s.id}">削除</button></li>`).join('');
+  const box = $('#staffList'), sel = $('#emRole'), cur = sel.value;
+  sel.innerHTML = '<option value="">すべての役割</option>' + state.roles.map(r => `<option value="${esc(r.name)}">${esc(r.name)}</option>`).join('') + '<option value="__none">役割なし</option>';
+  sel.value = [...sel.options].some(o => o.value === cur) ? cur : '';
+  const q = ($('#emSearch').value || '').trim(), rf = sel.value;
+  const list = state.staff.slice().sort((a, b) => roleIdx(a) - roleIdx(b) || b.rating - a.rating || state.staff.indexOf(a) - state.staff.indexOf(b))   // 階級順
+    .filter(s => (!q || s.name.includes(q)) && (!rf || (rf === '__none' ? !s.role : s.role === rf)));
+  $('#emCount').textContent = `${list.length}人` + (list.length !== state.staff.length ? `（全${state.staff.length}人）` : '');
+  if (!state.staff.length) { box.innerHTML = '<div class="empty">まだ従業員がいません。「＋ 従業員を追加」から登録できます（開発者モードで、例のデータも作れます）。</div>'; return; }
+  if (!list.length) { box.innerHTML = '<div class="empty">条件に合う従業員がいません。</div>'; return; }
+  box.innerHTML = '<table class="emtable"><thead><tr><th>名前</th><th>役割</th><th>評価</th><th>時給</th><th>出勤できる曜日・時間</th><th></th></tr></thead><tbody>' + list.map(s => `<tr>
+    <td class="nm"><b>${esc(s.name)}</b></td>
+    <td>${s.role ? `<span class="badge" style="background:${roleColor(s.role)}">${esc(s.role)}</span>` : '<span class="meta">—</span>'}</td>
+    <td><span class="stars">${stars(s.rating)}</span></td>
+    <td>${esc(wageText(s))}${belowMin(s) ? ' <span class="warnText">⚠最低賃金未満</span>' : ''}</td>
+    <td class="av">${(s.avail || []).length ? s.avail.map(x => `<span>${esc(daysText(slotDays(x)))} ${hm(x.start)}–${hm(x.end)}${x.kind === 'sub' ? '<i class="meta">（予備）</i>' : ''}</span>`).join('') : '<span class="warnText">未設定</span>'}</td>
+    <td class="btns"><button type="button" class="btn small" data-edit="${s.id}">編集</button> <button type="button" class="btn small" data-del="${s.id}">削除</button></td></tr>`).join('') + '</tbody></table>';
 }
+['emSearch', 'emRole'].forEach(id => $('#' + id).addEventListener(id === 'emSearch' ? 'input' : 'change', renderStaffList));
 $('#staffList').addEventListener('click', async e => {
   const ed = e.target.dataset.edit, del = e.target.dataset.del;
-  if (ed) {
-    const s = state.staff.find(x => x.id === ed);
-    editingId = ed; formRating = s.rating;
-    $('#fName').value = s.name; $('#fRole').value = s.role;
-    $('#fHours').value = s.hours || ''; $('#fWage').value = s.wage || ''; $('#fCur').value = s.cur || 'JPY';
-    setT('fStart', s.start); setT('fEnd', s.end); setT('fStart2', s.start2); setT('fEnd2', s.end2);
-    $('#formTitle').textContent = 'スタッフを編集';
-    $('#fSubmit').textContent = '変更を保存';
-    $('#fCancel').hidden = false;
-    renderStarInput(); $('#fName').focus();
-  }
+  if (ed) openEmp(ed);
   if (del) {
     const s = state.staff.find(x => x.id === del);
     if (!await ui.ask(`${s.name}さんを削除します。スケジュールからも外れます。`, { ok: '削除する', danger: true })) return;
@@ -468,6 +529,19 @@ $('#staffList').addEventListener('click', async e => {
     save(); renderStaffList(); renderGantt(); renderRoles(); ui.toast('削除しました');
   }
 });
+
+/* 最低賃金の設定 */
+function renderMinWage() {
+  $('#mwArea').value = state.settings.minWageArea; $('#mwVal').value = state.settings.minWage;
+  const low = state.staff.filter(belowMin).length;
+  $('#mwNote').textContent = `いまの最低賃金：${state.settings.minWageArea} ${state.settings.minWage.toLocaleString()}円` + (low ? `　⚠ 最低賃金を下回る時給の従業員が${low}人います` : '');
+}
+['mwArea', 'mwVal'].forEach(id => $('#' + id).addEventListener('change', () => {
+  const v = Math.round(+$('#mwVal').value);
+  if (!(v > 0)) { ui.toast('最低賃金は、0より大きい数を入れてください', 'err'); renderMinWage(); return; }
+  state.settings.minWage = v; state.settings.minWageArea = $('#mwArea').value.trim() || '（地域未設定）';
+  save(); renderMinWage(); renderStaffList(); renderGantt(); ui.toast('最低賃金を更新しました');
+}));
 
 /* ========== 条件設定（人数） ========== */
 function renderConditions() {
@@ -574,9 +648,9 @@ const AR_FIELDS = { rating: 'aRating', contig: 'aContig', wage: 'aWage', fair: '
 const AR_NUM = ['rating', 'contig', 'wage', 'fair'];
 const AR_OPTS = {
   fill: [['min', '最低人数まで（人件費を抑える）'], ['mid', '最低と最高の中間まで'], ['max', '最高人数まで']],
-  target: [['fill', '希望勤務時間まで勤務を追加する'], ['cap', '希望勤務時間を上限にする（追加はしない）'], ['ignore', '希望勤務時間を気にしない']],
+  target: [['fill', '出勤できる時間いっぱいまで勤務を追加する'], ['cap', '出勤できる時間を上限にする（追加はしない）'], ['ignore', '出勤できる時間の長さにこだわらない']],
   sub: [['never', '使わない'], ['fallback', '人手が足りないときだけ使う'], ['always', '本来の時間と同等に使う']],
-  fix: [['off', 'ゆるめない（足りないままにする）'], ['flex', '足りないときは、希望勤務時間・予備の時間・休みの日をゆるめて補う（希望休と希望時間の外には入れない）']]
+  fix: [['off', 'ゆるめない（足りないままにする）'], ['flex', '足りないときは、予備の時間・休みの日をゆるめて補う（希望休と希望時間の外には入れない）']]
 };
 const ruleLabel = () => state.autoRules.preset === 'custom' ? 'カスタム' : PRESETS[state.autoRules.preset].label;
 function renderAutoRules() {
@@ -627,7 +701,7 @@ $('#roleForm').addEventListener('submit', e => {
   } else {
     const r = state.roles[editingRole], old = r.name;
     r.name = name; r.color = color;
-    state.staff.forEach(s => { if (s.role === old) s.role = name; }); // 名前変更をスタッフにも反映
+    state.staff.forEach(s => { if (s.role === old) s.role = name; }); // 名前変更を従業員にも反映
     if (old !== name && state.roleRules[old]) { state.roleRules[name] = state.roleRules[old]; delete state.roleRules[old]; }
     ui.toast(`役割「${name}」を変更しました`);
   }
@@ -643,7 +717,7 @@ $('#roleList').addEventListener('click', async e => {
   }
   if (del != null) {
     const r = state.roles[del], users = state.staff.filter(s => s.role === r.name);
-    const msg = users.length ? `役割「${r.name}」を削除します。${users.length}人のスタッフの役割は「選択なし」になります。` : `役割「${r.name}」を削除します。`;
+    const msg = users.length ? `役割「${r.name}」を削除します。${users.length}人の従業員の役割は「選択なし」になります。` : `役割「${r.name}」を削除します。`;
     if (!await ui.ask(msg, { ok: '削除する', danger: true })) return;
     users.forEach(s => s.role = '');
     delete state.roleRules[r.name];
@@ -691,9 +765,9 @@ const shortageOf = (cnt, roleAt, H) => {   // 最低人数（全体・役割ご�
   H.forEach(h => { n += Math.max(0, rule(h).min - cnt[h]); state.roles.forEach(r => { n += Math.max(0, roleMinOf(r.name) - (roleAt[h][r.name] || 0)); }); });
   return n;
 };
-const makeP = (s, main, sub, target, bias = 0, rest = false) => ({ s, main, sub, target, bias, rest, yen: (s.cur === 'USD' ? s.wage * state.settings.rate : s.wage) || 0 });
+const makeP = (s, main, sub, target, bias = 0, rest = false) => ({ s, main, sub, target, bias, rest, yen: s.wage > 0 ? (s.cur === 'USD' ? s.wage * state.settings.rate : s.wage) : state.settings.minWage });
 
-/* 1日分（時間帯ごと）の配置を解く。P: 配置の対象になるスタッフ。bias は大きいほど後回しにする重み */
+/* 1日分（時間帯ごと）の配置を解く。P: 配置の対象になる従業員。bias は大きいほど後回しにする重み */
 function solveHours(P, H, seed, maxWorkers) {
   const R = state.autoRules;
   const W = { rating: [0, 1, 2, 4][R.rating], contig: [0, 1, 2, 4][R.contig], wage: [0, 0.3, 1, 2.5][R.wage], fair: [0, 0.4, 1, 2][R.fair] };
@@ -741,7 +815,7 @@ function solveHours(P, H, seed, maxWorkers) {
   });
 
   capOn = true;
-  // 2) 希望勤務時間まで勤務を追加（「希望勤務時間まで追加する」のとき）
+  // 2) 出勤できる時間いっぱいまで勤務を追加（「出勤できる時間いっぱいまで追加する」のとき）
   if (R.target === 'fill') {
     [...P].sort((a, b) => (a.bias - b.bias) || (W.rating ? b.s.rating - a.s.rating : 0)).forEach(p => {
       if (p.rest || full(p)) return;   // 休みの日は、最低人数を満たすために必要なときだけ出勤
@@ -883,7 +957,7 @@ function dayRuleOf(k) {
 }
 const srText = r => `${+r.month ? r.month + '月の' : ''}${r.day === 'date' ? (r.date ? mdText(r.date) : '（日付未指定）') : SR_LABEL[r.day]}：最低${r.min}人${r.max == null ? '' : '・最高' + r.max + '人'}`;
 
-/* ---- シフト管理のスタッフ並び替え（はじめは階級順） ---- */
+/* ---- シフト管理の従業員並び替え（はじめは階級順） ---- */
 const SHIFT_SORTS = {
   role: { label: '階級順（役割管理の並び順）', desc: false },
   rating: { label: '評価', desc: true },
@@ -957,10 +1031,10 @@ function dayStat(k) {   // lack = 人数が足りない（1日の人数ルール
 }
 
 /* 希望との食い違い：'req'=希望休の日 ／ 'out'=希望の時間外 */
-const conflictOf = (sh, pref, s) => {   // 'req' 希望休の日 / 'out' 希望時間の外
+const conflictOf = (sh, pref, s, k) => {   // 'req' 希望休の日 / 'out' 希望時間の外
   if (pref.status === 'off') return 'req';
   if (pref.status === 'time' && (tmin(sh.start) < tmin(pref.start) || tmin(sh.end) > tmin(pref.end))) return 'out';
-  if (s && (s.start || s.start2)) { const ok = new Set([...mainHours(s), ...subHours(s)]); if (shiftHourList(sh).some(h => !ok.has(h))) return 'out'; }
+  if (s && (s.avail || []).length) { const ok = new Set([...mainHours(s, k), ...subHours(s, k)]); if (shiftHourList(sh).some(h => !ok.has(h))) return 'out'; }
   return '';
 };
 
@@ -968,7 +1042,7 @@ const conflictOf = (sh, pref, s) => {   // 'req' 希望休の日 / 'out' 希望�
 function shiftCell(s, k, pk, compact) {
   const sh = dayShifts(k)[s.id], pref = adminPref(s.id, k, pk), L = state.settings, attr = `data-id="${s.id}" data-d="${k}"`, c = compact ? ' c' : '';
   if (isWork(sh)) {
-    const hrs = shiftHours(sh), over = hrs > L.limitDay, cf = conflictOf(sh, pref, s);
+    const hrs = shiftHours(sh), over = hrs > L.limitDay, cf = conflictOf(sh, pref, s, k);
     const title = `${s.name} ${hm(sh.start)}–${hm(sh.end)}（実働${fh(hrs)}時間${sh.brk ? '・休憩' + sh.brk + '分' : ''}）${cf === 'req' ? ' ※希望休の日です' : cf === 'out' ? ' ※希望の時間外です' : ''}`;
     const tag = !cf ? '' : compact ? '<em class="tag">!</em>' : `<em class="tag">${cf === 'req' ? '休希望' : '時間外'}</em>`;
     const body = compact ? `<span>${hm(sh.start)}</span><span>${hm(sh.end)}</span>` : `${hm(sh.start)}–${hm(sh.end)}<small>${fh(hrs)}時間${over ? ' ⚠' : ''}</small>`;
@@ -984,10 +1058,10 @@ function shiftCell(s, k, pk, compact) {
 
 function renderShiftDesktop(keys, pk, el, ro) {
   el = el || $('#wGrid');
-  const today = todayKey(), L = state.settings, anyWage = state.staff.some(s => s.wage), compact = keys.length > 14, nameW = compact ? 156 : NAME_W;
+  const today = todayKey(), L = state.settings, anyWage = state.staff.length > 0, compact = keys.length > 14, nameW = compact ? 156 : NAME_W;
   const dayCount = Array(keys.length).fill(0), dayCost = Array(keys.length).fill(0), active = keys.some(hasShifts), stat = keys.map(k => dayStat(k));
   const lowAt = i => active && stat[i].lack, anyRule = stat.some(x => x.rule);
-  let html = `<table class="gantt shiftgrid${compact ? ' compact' : ''}${ro ? ' ro' : ''}" style="width:100%;min-width:${nameW + keys.length * (compact ? 30 : 64)}px"><colgroup><col style="width:${nameW}px"></colgroup><thead><tr><th class="name">スタッフ</th>` +
+  let html = `<table class="gantt shiftgrid${compact ? ' compact' : ''}${ro ? ' ro' : ''}" style="width:100%;min-width:${nameW + keys.length * (compact ? 30 : 64)}px"><colgroup><col style="width:${nameW}px"></colgroup><thead><tr><th class="name">従業員</th>` +
     keys.map((k, i) => { const d = parseYmd(k), low = lowAt(i); return `<th class="${low ? 'low ' : ''}${k === today ? 'today ' : ''}${d.getDay() === 0 ? 'sun' : d.getDay() === 6 ? 'sat' : ''}" title="${mdText(k)}（${DOW[d.getDay()]}）${low ? '：人数が足りません' : ''}">${compact && i && d.getDate() !== 1 ? d.getDate() : mdText(k)}<small>${compact ? DOW[d.getDay()] : '（' + DOW[d.getDay()] + '）'}</small>${low ? '<i class="warnmark">⚠</i>' : ''}</th>`; }).join('') + '</tr></thead><tbody>';
   shiftStaff(keys, pk).forEach(s => {
     const sb = subOf(s.id, pk); let tot = 0;
@@ -999,7 +1073,7 @@ function renderShiftDesktop(keys, pk, el, ro) {
     const cost = tot * hourly(s);
     const overW = [...new Set(keys.map(k => ymd(mondayOf(parseYmd(k)))))].some(m => wkHours(s.id, m) > L.limitWeek);
     html += `<tr><th class="name"><b>${esc(s.name)}</b><div class="meta">${esc(s.role || '役割なし')}${compact ? (sb ? '' : ' ・<span class="warnText">未提出</span>') : ` ／ <span class="${sb ? '' : 'warnText'}">${sb ? '希望提出済み' : '希望未提出'}</span>`}</div>
-      <div class="meta${overW ? ' warnText' : ''}">${compact ? fh(tot) + 'h' : '合計' + fh(tot) + '時間'}${s.wage ? '・' + money(cost) : ''}${overW ? ' ⚠週超過' : ''}</div></th>${cells}</tr>`;
+      <div class="meta${overW ? ' warnText' : ''}">${compact ? fh(tot) + 'h' : '合計' + fh(tot) + '時間'}・${money(cost)}${overW ? ' ⚠週超過' : ''}</div></th>${cells}</tr>`;
   });
   html += '</tbody><tfoot>';
   if (anyRule) html += '<tr class="need"><th class="name">必要人数<small>人数ルール</small></th>' + stat.map(st => `<td>${st.rule ? st.rule.min + (compact ? (st.rule.max == null ? '+' : '-' + st.rule.max) : '〜' + (st.rule.max == null ? '' : st.rule.max)) : '—'}</td>`).join('') + '</tr>';
@@ -1008,7 +1082,7 @@ function renderShiftDesktop(keys, pk, el, ro) {
   el.innerHTML = html + '</tfoot></table>';
 }
 
-/* ---- スマホ版：月カレンダー（出勤人数つき）＋ 選んだ日のスタッフ一覧 ---- */
+/* ---- スマホ版：月カレンダー（出勤人数つき）＋ 選んだ日の従業員一覧 ---- */
 let mDay = null;
 function renderShiftMobile(keys, pk) {
   const today = todayKey(), active = keys.some(hasShifts);
@@ -1028,7 +1102,7 @@ function renderShiftMobile(keys, pk) {
     const sh = dayShifts(mDay)[s.id], pref = adminPref(s.id, mDay, pk);
     let chip, cls = '', style = '';
     if (isWork(sh)) {
-      const cf = conflictOf(sh, pref, s);
+      const cf = conflictOf(sh, pref, s, mDay);
       chip = `${hm(sh.start)}–${hm(sh.end)}（${fh(shiftHours(sh))}時間）${cf === 'req' ? ' ※希望休の日' : cf === 'out' ? ' ※時間外' : ''}`; cls = 'work'; style = ` style="background:${roleColor(s.role)}"`;
     } else if (pref.status === 'off') { chip = '希望休'; cls = 'pf-off'; }
     else if (sh && sh.off) { chip = '休み'; cls = 'rest'; }
@@ -1057,13 +1131,13 @@ function renderShift() {
   $('#wGrid').hidden = mobile; $('#wMobile').hidden = !mobile;
   $('#wGrid').classList.toggle('locked', pub); $('#wMobile').classList.toggle('locked', pub);
   if (!state.staff.length) {
-    const msg = '<div class="empty">スタッフがまだいません。「スタッフ」タブから登録してください。</div>';
+    const msg = '<div class="empty">従業員がまだいません。「従業員」タブから登録してください。</div>';
     $('#wGrid').innerHTML = msg; $('#wMobile').innerHTML = msg; $('#wTotal').textContent = ''; $('#wReq').innerHTML = ''; return;
   }
   const mc = !!state.closed[pk]; $('#wCloseNow').textContent = mc ? '受付を再開する' : '今すぐ締め切る'; $('#wCloseNow').disabled = !mc && isClosed(pk);
   renderRuleNote(keys); renderShiftSortBar(); renderLackLine(keys);
   if (mobile) renderShiftMobile(keys, pk); else renderShiftDesktop(keys, pk);
-  const anyWage = state.staff.some(s => s.wage);
+  const anyWage = state.staff.length > 0;
   let grand = 0, grandCost = 0;
   state.staff.forEach(s => keys.forEach(k => { const h = shiftHours(dayShifts(k)[s.id]); grand += h; grandCost += h * hourly(s); }));
   $('#wTotal').textContent = grand ? `この期間の合計　${fh(grand)}時間${anyWage ? '・' + money(grandCost) : ''}` : '';
@@ -1123,11 +1197,11 @@ $('#wPublish').addEventListener('click', async () => {
 
 /* ---- 期間まるごと自動作成 ----
    希望休は必ず守る。人手が足りない日は、設定「人手が足りないときの対応」に従って、段階的に条件をゆるめて補う。
-   level 0=通常 ／ 1=希望勤務時間・予備の時間・休みの日をゆるめる ／ 2=さらに時間指定・勤務時間の上限・連続勤務の上限もゆるめる */
+   level 0=通常 ／ 1=予備の時間・休みの日をゆるめる ／ 2=さらに時間指定・勤務時間の上限・連続勤務の上限もゆるめる */
 function autoShifts(p, keep) {
   const keys = pKeys(p), R = state.autoRules, S = state.settings, H = hoursList(), pk = ymd(p.start);
   const fairP = [0, 0.15, 0.3, 0.6][R.fair], total = {}, shortDays = [], relaxed = { soft: 0, hard: 0 };
-  const maxLevel = R.fix === 'off' ? 0 : 1;   // ゆるめるのは、希望勤務時間・予備の時間・休みの日まで
+  const maxLevel = R.fix === 'off' ? 0 : 1;   // ゆるめるのは、予備の時間・休みの日まで
   const hrsOf = x => isWork(x) ? shiftHours(x) : 0;
   state.staff.forEach(s => total[s.id] = 0);
   keys.forEach(k => {   // 「残す」のときは、自動で作った分だけを消す（手で入れたシフト・休みは固定）
@@ -1145,15 +1219,15 @@ function autoShifts(p, keep) {
       if (streakOf(s.id, k) >= S.maxStreak) return;                                       // 連続勤務の上限
       const room = Math.min(S.limitDay, S.limitWeek - wkHours(s.id, k));                 // 1日・週の注意ライン
       if (room <= 0) return;
-      let main = mainHours(s), sub = (R.sub === 'never' && level < 1) ? [] : subHours(s);
+      let main = mainHours(s, k), sub = (R.sub === 'never' && level < 1) ? [] : subHours(s, k);
       if (pref.status === 'time') {                                                      // 本人の時間指定の中だけ
         const lo = toH(pref.start), hi = toH(pref.end, true);
         main = main.filter(h => h >= lo && h < hi); sub = sub.filter(h => h >= lo && h < hi);
       }
       main = main.filter(h => H.includes(h)); sub = sub.filter(h => H.includes(h));
       if (!main.length && !sub.length) return;
-      const base = (R.target === 'ignore' || level >= 1) ? Infinity : (s.hours || mainHours(s).length);
-      P.push(makeP(s, main, sub, Math.min(base, room), total[s.id] * fairP, level < 1 && parseYmd(k).getDay() === (idx + 1) % 7));   // 週に1日は、スタッフごとに曜日をずらして休み
+      const base = (R.target === 'ignore' || level >= 1) ? Infinity : mainHours(s, k).length;
+      P.push(makeP(s, main, sub, Math.min(base, room), total[s.id] * fairP, level < 1 && parseYmd(k).getDay() === (idx + 1) % 7));   // 週に1日は、従業員ごとに曜日をずらして休み
     });
     return P;
   };
@@ -1225,7 +1299,7 @@ $('#wCloseNow').addEventListener('click', async () => {
 $('#wAuto').addEventListener('click', async () => {
   const pk = ymd(aP.start);
   if (isPublished()) return lockedMsg();
-  if (!state.staff.length) return ui.toast('先にスタッフを登録してください', 'err');
+  if (!state.staff.length) return ui.toast('先に従業員を登録してください', 'err');
   const unsub = state.staff.filter(s => !subOf(s.id, pk)).map(s => s.name);
   const keep = $('#wKeep').checked, any = pKeys(aP).some(hasShifts);
   const msg = `${pLabel(aP)} のシフトを自動作成します。` + (any ? (keep ? '\n手で入れたシフトと休みは残し、ほかを作り直します。' : '\n今のシフト（休みの指定を含む）は、すべて作り直されます。') : '') +
@@ -1233,7 +1307,7 @@ $('#wAuto').addEventListener('click', async () => {
   if (!await ui.ask(msg, { ok: '自動作成する' })) return;
   const { shortDays, relaxed } = autoShifts(aP, keep); save(); renderShift();
   const notes = [];
-  if (relaxed.soft) notes.push(`${relaxed.soft}日は人手不足を補うため、希望勤務時間などをゆるめました。`);
+  if (relaxed.soft) notes.push(`${relaxed.soft}日は人手不足を補うため、予備の時間などをゆるめました。`);
   if (shortDays.length) notes.push(`それでも最低人数に届かない日：${shortDays.slice(0, 4).map(mdText).join('、')}${shortDays.length > 4 ? `…ほか${shortDays.length - 4}日` : ''}`);
   ui.toast(`シフトを自動作成しました（${ruleLabel()}）。希望休と希望時間の外には入れていません。` + (notes.join('') || '必要なマスを調整してください'), shortDays.length ? 'warn' : '');
 });
@@ -1246,7 +1320,7 @@ function updateShiftInfo() {
   const a = getT('sStart'), b = getT('sEnd'), brk = +$('#sBreak').value, el = $('#sInfo');
   if (!a || !b || tmin(b) <= tmin(a) || !editShift) { el.textContent = ''; return; }
   const hrs = Math.max(0, (tmin(b) - tmin(a) - brk) / 60), s = state.staff.find(x => x.id === editShift.id);
-  el.textContent = `実働 ${fh(hrs)}時間` + (s.wage ? `・${money(hrs * hourly(s))}` : '') +
+  el.textContent = `実働 ${fh(hrs)}時間` + `・${money(hrs * hourly(s))}` +
     (hrs > state.settings.limitDay ? `　⚠ 1日の注意ライン（${state.settings.limitDay}時間）を超えています` : '');
   const need = legalBreak((tmin(b) - tmin(a)) / 60);
   if (brk < need) el.textContent += `　※法定の休憩（${need}分）が必要なため、保存すると自動で入ります`;
@@ -1260,9 +1334,9 @@ function openShift(id, date) {
   const s = state.staff.find(x => x.id === id), cur = dayShifts(date)[id], pref = adminPref(id, date, pkOf(date)), work = isWork(cur);
   editShift = { id, date };
   $('#sTitle').textContent = `${s.name}　${date.replace(/-/g, '/')}（${DOW[parseYmd(date).getDay()]}）`;
-  $('#sHint').textContent = `通常の出勤時間：${s.start}–${s.end}` + (s.start2 ? `／予備：${s.start2}–${s.end2}` : '') + (cur && cur.off ? '　【今は「休み」に指定中】' : '');
+  $('#sHint').textContent = `出勤できる曜日・時間：${availText(s)}` + (cur && cur.off ? '　【今は「休み」に指定中】' : '');
   $('#sPref').textContent = '本人の希望：' + prefText(pref);
-  $('#sFillSub').hidden = !s.start2;
+  $('#sFillSub').hidden = !slotFor(s, date, 'sub');
   setT('sStart', work ? cur.start : ''); setT('sEnd', work ? cur.end : ''); setBreak(work ? cur.brk : 0);
   $('#sDelete').hidden = !!(cur && cur.off); $('#sUnset').hidden = !cur; $('#sSave').textContent = work ? '変更を保存' : '保存';
   updateShiftInfo(); shiftEl.hidden = false; $('#sStart input').focus();
@@ -1277,8 +1351,9 @@ async function activateCell(id, k) {
 }
 $('#wGrid').addEventListener('click', e => { const td = e.target.closest('.scell'); if (td) activateCell(td.dataset.id, td.dataset.d); });
 const fillShift = (a, b) => { setT('sStart', a); setT('sEnd', b); setBreak(legalBreak((tmin(b) - tmin(a)) / 60)); updateShiftInfo(); };
-$('#sFillMain').addEventListener('click', () => { const s = state.staff.find(x => x.id === editShift.id); fillShift(s.start, s.end); });
-$('#sFillSub').addEventListener('click', () => { const s = state.staff.find(x => x.id === editShift.id); fillShift(s.start2, s.end2); });
+const slotFor = (s, date, kind) => (s.avail || []).find(x => (kind === 'sub' ? x.kind === 'sub' : x.kind !== 'sub') && slotDays(x).includes(parseYmd(date).getDay()));
+$('#sFillMain').addEventListener('click', () => { const s = state.staff.find(x => x.id === editShift.id), sl = slotFor(s, editShift.date, 'main'); if (!sl) return ui.toast('この曜日に出勤できる時間が登録されていません', 'warn'); fillShift(sl.start, sl.end); });
+$('#sFillSub').addEventListener('click', () => { const s = state.staff.find(x => x.id === editShift.id), sl = slotFor(s, editShift.date, 'sub'); if (sl) fillShift(sl.start, sl.end); });
 ['click', 'input', 'change', 'focusout'].forEach(ev => shiftEl.addEventListener(ev, () => editShift && updateShiftInfo()));
 $('#sCancel').addEventListener('click', closeShift);
 shiftEl.addEventListener('click', e => { if (e.target === shiftEl) closeShift(); });
@@ -1300,7 +1375,7 @@ $('#sSave').addEventListener('click', async () => {
   if (tmin(b) <= tmin(a)) return ui.toast('退勤は出勤より後にしてください', 'err');
   if (brk >= tmin(b) - tmin(a)) return ui.toast('休憩が勤務時間より長くなっています', 'err');
   const stf = state.staff.find(x => x.id === editShift.id);
-  if (conflictOf({ start: a, end: b }, adminPref(editShift.id, editShift.date, pkOf(editShift.date)), stf) === 'out' &&
+  if (conflictOf({ start: a, end: b }, adminPref(editShift.id, editShift.date, pkOf(editShift.date)), stf, editShift.date) === 'out' &&
       !await ui.ask(`${stf.name}さんの希望時間の外です。\n原則として、希望時間の外にはシフトを入れません。それでも保存しますか？`, { ok: 'それでも保存', danger: true })) return;
   if (!editShift) return;
   const need = legalBreak((tmin(b) - tmin(a)) / 60), bumped = brk < need;   // 法定の最低休憩に足りなければ、自動で入れる
@@ -1308,7 +1383,7 @@ $('#sSave').addEventListener('click', async () => {
   const { id, date } = editShift, pref = adminPref(id, date, pkOf(date));
   (state.shifts[date] = state.shifts[date] || {})[id] = { start: a, end: b, brk };
   save(); closeShift(); renderShift();
-  const cf = conflictOf({ start: a, end: b }, pref), note = cf === 'req' ? '（希望休の日です）' : cf === 'out' ? '（希望の時間外です）' : '';
+  const cf = conflictOf({ start: a, end: b }, pref, stf, date), note = cf === 'req' ? '（希望休の日です）' : cf === 'out' ? '（希望の時間外です）' : '';
   ui.toast('シフトを保存しました' + note + (bumped ? `（法定の休憩${need}分を入れました）` : ''), note ? 'warn' : '');
 });
 
@@ -1469,7 +1544,7 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 const shuffle = arr => { for (let i = arr.length - 1; i > 0; i--) { const j = rnd(0, i); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
 const hh = n => pad2(n) + ':00';
 
-/* 業態ごとの階級（役割）と、スタッフの傾向。店長（boss）は基本的に1人だけ */
+/* 業態ごとの階級（役割）と、従業員の傾向。店長（boss）は基本的に1人だけ */
 const INDUSTRIES = {
   restaurant: { label: '飲食店', open: 10, close: 24, demand: [[10, 11, 2], [11, 14, 5], [14, 17, 3], [17, 21, 6], [21, 23, 3], [23, 24, 2]], wk: 1.3, roles: [
     { name: '店長', color: '#a23b5a', boss: true, max: 1, w: 0, rating: [4, 5], wage: [1800, 2400], len: [8, 10], win: 'any' },
@@ -1536,36 +1611,49 @@ function applyIndustryRules(ctx) {
 
 /* 時間帯ごとの必要人数（業態の目安 × 店の規模） */
 const demandAt = (ind, h, scale) => { const seg = ind.demand.find(([a, b]) => h >= a && h < b); return Math.max(1, Math.round((seg ? seg[2] : 1) * scale)); };
-
-function buildStaff(sp, st, en, isBoss, used, idx) {
-  const close = state.close, eng = !isBoss && Math.random() < 0.12;
+const WD = [1, 2, 3, 4, 5], WE = [6, 0];
+const frac = (days, type) => { const base = type === 'we' ? WE : WD; return days.filter(d => base.includes(d)).length / base.length; };   // その種類の曜日のうち、出勤できる割合
+/* 出勤できる曜日のパターン（現実の働き方に近づける）。type：足りない曜日の種類（'wd' 平日 / 'we' 休日） */
+function pickDays(type) {
+  const r = Math.random(), all = [1, 2, 3, 4, 5, 6, 0];
+  if (type === 'we') return r < 0.45 ? WE.slice() : r < 0.75 ? all : [...WE, ...shuffle(WD.slice()).slice(0, rnd(2, 3))];
+  if (type === 'wd') return r < 0.45 ? WD.slice() : r < 0.75 ? all : shuffle(WD.slice()).slice(0, rnd(3, 4));
+  return r < 0.5 ? all : r < 0.65 ? WD.slice() : r < 0.8 ? [...WE, ...shuffle(WD.slice()).slice(0, rnd(1, 3))] : shuffle(all).slice(0, rnd(3, 5));
+}
+/* 1人分：出勤できる曜日と時間（複数の時間帯・予備つき）、時給（多くの人は最低賃金のまま）を作る */
+function buildStaff(sp, st, en, isBoss, used, idx, days) {
+  const open = state.open, close = state.close, min = state.settings.minWage;
   let name, tries = 0;
-  do { name = eng ? pick(RND_EN) : pick(RND_SUR) + pick(RND_GIV); tries++; } while (used.has(name) && tries < 40);
+  do { name = pick(RND_SUR) + pick(RND_GIV); tries++; } while (used.has(name) && tries < 40);
   if (used.has(name)) name += rnd(2, 9);
   used.add(name);
-  const hasSub = Math.random() < 0.4 && en < close;
-  return {
-    id: 's' + Date.now() + '_r' + idx, name, role: sp.name, rating: rnd(sp.rating[0], sp.rating[1]),
-    hours: isBoss ? en - st : Math.min(en - st, rnd(Math.min(4, en - st), en - st)),
-    wage: eng ? rnd(12, 20) : Math.round(rnd(sp.wage[0], sp.wage[1]) / 50) * 50, cur: eng ? 'USD' : 'JPY',
-    start: hh(st), end: hh(en), start2: hasSub ? hh(en) : '', end2: hasSub ? hh(Math.min(close, en + rnd(1, 3))) : ''
-  };
+  const main = DAY_ORDER.filter(d => days.includes(d)), avail = [{ days: main, start: hh(st), end: hh(en), kind: 'main' }];
+  if (Math.random() < 0.35 && en < close) avail.push({ days: main.slice(), start: hh(en), end: hh(Math.min(close, en + rnd(1, 3))), kind: 'sub' });
+  const rest = DAY_ORDER.filter(d => !days.includes(d));
+  if (!isBoss && rest.length && Math.random() < 0.3) {   // ほかの曜日は、別の時間帯で出られる人（「＋ 追加」の例）
+    const l2 = Math.min(close - open, rnd(4, 8)), s2 = rnd(open, close - l2);
+    avail.push({ days: rest, start: hh(s2), end: hh(s2 + l2), kind: 'main' });
+  }
+  const w = Math.round(rnd(sp.wage[0], sp.wage[1]) / 10) * 10;
+  return { id: 's' + Date.now() + '_r' + idx, name, role: sp.name, rating: rnd(sp.rating[0], sp.rating[1]), wage: w > min + 20 ? w : 0, cur: 'JPY', avail };
 }
-/* 企業が「各時間帯の必要人数が足りるように採用する」イメージ：足りない時間帯を見つけて、そこに出勤できる人を足していく。
-   スタッフは週に4.5日（約64%）しか出勤しない想定なので、必要人数の約1.56倍（× 余裕）の人が出勤可能になるまで採用する */
+const addSupply = (sup, s, open, close) => (s.avail || []).filter(x => x.kind !== 'sub').forEach(x => {
+  for (let h = toH(x.start); h < toH(x.end, true); h++) ['wd', 'we'].forEach(t => { if (sup[t][h] !== undefined) sup[t][h] += frac(slotDays(x), t); });
+});
+/* 企業が「各時間帯の必要人数が足りるように採用する」イメージ：平日・休日それぞれで足りない時間帯を見つけて、そこに出勤できる人を足していく。
+   従業員は、出勤できる日の約64%（週4.5日ぶん）しか出勤しない想定で、必要人数の約1.56倍（× 余裕）の人が出勤できるまで採用する */
 function randomStaffDemand(indKey, scale, margin) {
   const ind = INDUSTRIES[indKey], open = state.open, close = state.close, span = close - open;
-  const used = new Set(state.staff.map(s => s.name)), counts = {}, out = [], supply = {};
-  state.staff.forEach(s => { counts[s.role] = (counts[s.role] || 0) + 1; });
-  for (let h = open; h < close; h++) supply[h] = 0;
-  state.staff.forEach(s => { for (let h = toH(s.start); h < toH(s.end, true); h++) if (supply[h] !== undefined) supply[h]++; });
-  const needSup = h => Math.ceil(demandAt(ind, h, scale) * 1.56 * margin), specs = ind.roles, boss = specs.find(sp => sp.boss);
-  const room = x => x.w > 0 && (x.max == null || (counts[x.name] || 0) < x.max);
-  for (let i = 0; i < 200; i++) {
-    const deficit = []; for (let h = open; h < close; h++) if (supply[h] < needSup(h)) deficit.push(h);
-    if (!deficit.length) break;
-    deficit.sort((a, b) => (needSup(b) - supply[b]) - (needSup(a) - supply[a]));
-    const hc = deficit[0];
+  const used = new Set(state.staff.map(s => s.name)), counts = {}, out = [], sup = { wd: {}, we: {} };
+  for (let h = open; h < close; h++) { sup.wd[h] = 0; sup.we[h] = 0; }
+  state.staff.forEach(s => { counts[s.role] = (counts[s.role] || 0) + 1; addSupply(sup, s); });
+  const need = (t, h) => Math.ceil(demandAt(ind, h, scale) * (t === 'we' ? ind.wk : 1) * 1.56 * margin);
+  const specs = ind.roles, boss = specs.find(sp => sp.boss), room = x => x.w > 0 && (x.max == null || (counts[x.name] || 0) < x.max);
+  for (let i = 0; i < 300; i++) {
+    let worst = null;
+    ['wd', 'we'].forEach(t => { for (let h = open; h < close; h++) { const gap = need(t, h) - sup[t][h]; if (gap > 0 && (!worst || gap > worst.gap)) worst = { t, h, gap }; } });
+    if (!worst) break;
+    const { t, h: hc } = worst;
     let sp, isBoss = false;
     if (boss && !(counts[boss.name] || 0)) { sp = boss; isBoss = true; }
     else {
@@ -1575,25 +1663,27 @@ function randomStaffDemand(indKey, scale, margin) {
       for (const x of pool) { r -= x.w; if (r <= 0) { sp = x; break; } }
     }
     counts[sp.name] = (counts[sp.name] || 0) + 1;
-    const len = Math.min(span, rnd(sp.len[0], sp.len[1])), st = Math.min(close - len, Math.max(open, hc - rnd(0, len - 1))), en = st + len;
-    out.push(buildStaff(sp, st, en, isBoss, used, out.length));
-    for (let h = st; h < en; h++) supply[h]++;
+    const len = Math.min(span, rnd(sp.len[0], sp.len[1])), st = Math.min(close - len, Math.max(open, hc - rnd(0, len - 1)));
+    const s = buildStaff(sp, st, st + len, isBoss, used, out.length, pickDays(t)); out.push(s); addSupply(sup, s);
   }
   return out;
 }
-/* いまのスタッフで、必要人数（時間帯ごとの最低人数）を満たせそうか */
+/* いまの従業員で、必要人数（時間帯ごとの最低人数）を満たせそうか（平日・休日） */
 function supplyReport() {
   if (!state.staff.length) return '';
-  const H = hoursList(); let worst = Infinity, worstH = open_(), sum = 0; const weak = [];
-  H.forEach(h => {
-    const sup = state.staff.filter(s => mainHours(s).includes(h) || subHours(s).includes(h)).length, ratio = sup * 0.64 / Math.max(1, rule(h).min);
-    sum += ratio; if (ratio < worst) { worst = ratio; worstH = h; } if (ratio < 1) weak.push(h);
+  const H = hoursList(), res = {};
+  ['wd', 'we'].forEach(t => {
+    const sup = {}; H.forEach(h => { sup[h] = 0; }); state.staff.forEach(s => addSupply({ wd: t === 'wd' ? sup : {}, we: t === 'we' ? sup : {} }, s));
+    let worst = Infinity, worstH = H[0], sum = 0; const weak = [];
+    H.forEach(h => { const ratio = sup[h] * 0.64 / Math.max(1, rule(h).min); sum += ratio; if (ratio < worst) { worst = ratio; worstH = h; } if (ratio < 1) weak.push(h); });
+    res[t] = { worst, worstH, avg: sum / H.length, weak };
   });
-  return `人員の充足度（出勤できる人数 × 出勤率64% ÷ 必要人数）：最も低いのは${worstH}時台の${worst.toFixed(1)}倍、平均${(sum / H.length).toFixed(1)}倍。` +
-    (weak.length ? `⚠ ${weak.map(h => h + '時台').join('、')}は、必要人数を満たせない見込みです。` : '全時間帯で、必要人数を満たせる見込みです。');
+  const f = (t, n) => `${n}：最低${res[t].worst.toFixed(1)}倍（${res[t].worstH}時台）・平均${res[t].avg.toFixed(1)}倍`;
+  const weak = [...res.wd.weak.map(h => '平日' + h + '時台'), ...res.we.weak.map(h => '休日' + h + '時台')];
+  return `人員の充足度（出勤できる人数 × 出勤率64% ÷ 必要人数）　${f('wd', '平日')}／${f('we', '休日')}。` + (weak.length ? `⚠ ${weak.slice(0, 8).join('、')}${weak.length > 8 ? '…' : ''}は、必要人数を満たせない見込みです。` : '全時間帯で、必要人数を満たせる見込みです。');
 }
-const open_ = () => state.open;
 
+/* 人数を決めて作る（業態の「必要人数から自動」をオフにしたとき） */
 function randomStaff(n, indKey) {
   const ind = INDUSTRIES[indKey], open = state.open, close = state.close, span = Math.max(1, close - open), out = [];
   const GENERIC = { name: '', w: 1, rating: [1, 5], wage: [1000, 1500], len: [4, 8], win: 'any' };
@@ -1612,37 +1702,22 @@ function randomStaff(n, indKey) {
     const isBoss = !!boss && i === 0 && !(counts[boss.name] || 0);   // 店長は、いなければ最初の1人だけ
     const sp = isBoss ? boss : pickRole();
     counts[sp.name] = (counts[sp.name] || 0) + 1;
-    const en = !isBoss && Math.random() < 0.12;
-    let name, tries = 0;
-    do { name = en ? pick(RND_EN) : pick(RND_SUR) + pick(RND_GIV); tries++; } while (used.has(name) && tries < 40);
-    if (used.has(name)) name += rnd(2, 9);
-    used.add(name);
     const len = Math.min(span, rnd(sp.len[0], sp.len[1])), slack = Math.max(0, span - len);
     const kind = sp.win === 'any' ? ['early', 'any', 'late'][i % 3] : sp.win;   // 朝・昼・夜がばらけるようにする
     const st = open + (kind === 'early' ? rnd(0, Math.floor(slack / 3)) : kind === 'late' ? slack - rnd(0, Math.floor(slack / 3)) : kind === 'night' ? slack : rnd(0, slack));
-    const end = Math.min(close, st + len), hasSub = Math.random() < 0.4 && end < close;
-    out.push({
-      id: 's' + Date.now() + '_r' + i, name, role: sp.name,
-      rating: rnd(sp.rating[0], sp.rating[1]), hours: isBoss ? end - st : Math.min(end - st, rnd(Math.min(4, end - st), end - st)),
-      wage: en ? rnd(12, 20) : Math.round(rnd(sp.wage[0], sp.wage[1]) / 50) * 50, cur: en ? 'USD' : 'JPY',
-      start: hh(st), end: hh(end),
-      start2: hasSub ? hh(end) : '', end2: hasSub ? hh(Math.min(close, end + rnd(1, 3))) : ''
-    });
+    out.push(buildStaff(sp, st, Math.min(close, st + len), isBoss, used, i, pickDays()));
   }
-  // 営業時間のどの時間にも、出勤できる人がいるようにする（誰も入れない時間ができないように、近い人の時間を延ばす）
-  const covers = (x, h) => (x.start && h >= toH(x.start) && h < toH(x.end, true)) || (x.start2 && h >= toH(x.start2) && h < toH(x.end2, true));
-  for (let h = open; h < close; h++) {
-    if (state.staff.some(x => covers(x, h)) || out.some(x => covers(x, h))) continue;
-    const cand = out.filter(x => x.role !== (boss && boss.name)).sort((a, b) => dist(a, h) - dist(b, h))[0] || out[0];
-    if (!cand) break;
-    if (h >= toH(cand.end, true)) {   // 後ろへ延ばす（予備の時間として）
-      const from = cand.start2 ? toH(cand.start2) : toH(cand.end, true);
-      cand.start2 = hh(from); cand.end2 = hh(Math.min(close, h + 1));
-    } else cand.start = hh(h);        // 前へ延ばす
-  }
+  // 平日・休日のどの時間にも、出勤できる人が1人はいるようにする
+  const all = [...state.staff, ...out];
+  [['wd', WD], ['we', WE]].forEach(([, base]) => {
+    for (let h = open; h < close; h++) {
+      if (all.some(x => (x.avail || []).some(sl => sl.kind !== 'sub' && h >= toH(sl.start) && h < toH(sl.end, true) && slotDays(sl).some(d => base.includes(d))))) continue;
+      const c = out.filter(x => !boss || x.role !== boss.name)[0] || out[0]; if (!c) break;
+      c.avail.push({ days: base.slice(), start: hh(h), end: hh(Math.min(close, h + 4)), kind: 'main' });
+    }
+  });
   return out;
 }
-const dist = (x, h) => { const a = toH(x.start), b = Math.max(toH(x.end, true), x.end2 ? toH(x.end2, true) : 0); return h < a ? a - h : h >= b ? h - b + 1 : 0; };
 
 function randomPrefs(p) {
   const keys = pKeys(p), pk = ymd(p.start), open = state.open, close = state.close;
@@ -1671,7 +1746,7 @@ function renderDev() {
   renderAdmins();
   $('#dLayout').value = state.settings.layout || 'auto';
   const kb = Math.round((localStorage.getItem(KEY) || '').length / 102.4) / 10;
-  $('#dInfo').textContent = `スタッフ ${state.staff.length}人 ／ シフトのある日 ${Object.keys(state.shifts).length}日 ／ 保存データ 約${kb}KB`;
+  $('#dInfo').textContent = `従業員 ${state.staff.length}人 ／ シフトのある日 ${Object.keys(state.shifts).length}日 ／ 保存データ 約${kb}KB`;
   $('#dReport').textContent = supplyReport();
   syncDevCount();
 }
@@ -1684,7 +1759,7 @@ $('#dRandomStaff').addEventListener('click', async () => {
   let n = Math.round(+$('#dCount').value);
   if (!auto && !(n >= 1 && n <= 50)) return ui.toast('人数は1〜50で入れてください', 'err');
   const replace = $('#dMode').value === 'replace';
-  if (replace && state.staff.length && !await ui.ask(`今のスタッフ${state.staff.length}人と、そのシフト・希望がすべて消えます。入れ替えますか？`, { ok: '入れ替える', danger: true })) return;
+  if (replace && state.staff.length && !await ui.ask(`今の従業員${state.staff.length}人と、そのシフト・希望がすべて消えます。入れ替えますか？`, { ok: '入れ替える', danger: true })) return;
   if (replace) { state.staff = []; state.work = {}; state.workMode = {}; state.shifts = {}; state.prefs = {}; state.published = {}; state.auth.users = state.auth.users.filter(u => u.role !== 'employee'); }
   if (apply) applyIndustry(ind);
   const scale = +$('#dScale').value, margin = +$('#dMargin').value;
@@ -1692,11 +1767,11 @@ $('#dRandomStaff').addEventListener('click', async () => {
   if (apply) { applyIndustryRules(auto ? { ind, scale } : null); renderConditions(); renderTimeRange(); renderRoleRules(); renderShiftRules(); }
   const rows = $('#dAcct').checked ? made.map(issueFor) : [];
   save(); renderRoles(); renderGantt(); renderDev();
-  ui.toast(`ランダムなスタッフを${n}人登録しました${apply ? `（${ind.label}モード${auto ? '・必要人数から自動' : ''}）` : ''}`);
+  ui.toast(`ランダムな従業員を${n}人登録しました${apply ? `（${ind.label}モード${auto ? '・必要人数から自動' : ''}）` : ''}`);
   if (rows.length) showCreds('従業員アカウントを発行しました', '初期パスワードは、この画面でしか確認できません。控えてから閉じてください（最初のログインで本人が変更します）。', credText(rows));
 });
 $('#dRandomPrefs').addEventListener('click', async () => {
-  if (!state.staff.length) return ui.toast('先にスタッフを登録してください', 'warn');
+  if (!state.staff.length) return ui.toast('先に従業員を登録してください', 'warn');
   const p = periodOf(new Date());
   if (!await ui.ask(`${pLabel(p)} の希望を、全員分ランダムに作り直します。今ある希望と提出は上書きされます。`, { ok: '作る' })) return;
   randomPrefs(p); save(); renderDev();
@@ -1725,39 +1800,53 @@ function setMode(m) {
 }
 document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
 
-/* ========== スタッフ一括登録 ========== */
+/* ========== 従業員一括登録 ========== */
 const ROLE_PALETTE = ['#0f6e6e', '#3b6fb6', '#b45f06', '#a23b5a', '#5b7a2f', '#6b5b95', '#8a6d1d', '#2f7d9a'];
-const BULK_SAMPLE = '田中太郎,レジ,4,6,1100,9:00,15:00,15:00,18:00\nSarah Lee,接客,5,5,$15,12:00,18:00,,\n佐藤花子,調理,3,8,1200,10:00,18:00,,';
+const BULK_SAMPLE = '田中太郎,レジ,4,,月火水木金 9:00-15:00; 土日 12:00-18:00\nSarah Lee,接客,5,1300,毎日 12:00-18:00\n佐藤花子,調理,3,,平日 10:00-18:00; 土 10:00-14:00（予備）';
 
-/* 1行1人。タブ区切り（表計算ソフトからの貼り付け）またはカンマ区切り */
+/* 「月火水木金 9:00-15:00; 土日 12:00-18:00（予備）」のような書き方を読み取る */
+const DAY_CH = { '月': 1, '火': 2, '水': 3, '木': 4, '金': 5, '土': 6, '日': 0 };
+function parseDays(t) {
+  if (t === '毎日') return [1, 2, 3, 4, 5, 6, 0];
+  if (t === '平日') return [1, 2, 3, 4, 5];
+  if (t === '週末' || t === '土日') return [6, 0];
+  const out = [];
+  for (const ch of t) { if (!(ch in DAY_CH)) return null; if (!out.includes(DAY_CH[ch])) out.push(DAY_CH[ch]); }
+  return out.length ? out : null;
+}
+function parseAvail(str) {
+  const avail = [], errs = [];
+  String(str).split(/[;；|／]/).map(x => x.trim()).filter(Boolean).forEach(seg => {
+    const m = seg.match(/^(毎日|平日|週末|土日|[月火水木金土日]+)\s*([0-9０-９:：]+)\s*[-〜~ー–－]\s*([0-9０-９:：]+)\s*(\(?（?予備\)?）?)?$/);
+    if (!m) { errs.push(`「${seg}」を読み取れません`); return; }
+    const days = parseDays(m[1]), a = parseT(m[2]), b = parseT(m[3]);
+    if (!days || !a || !b || toH(b, true) <= toH(a)) { errs.push(`「${seg}」の曜日か時刻が正しくありません`); return; }
+    avail.push({ days: DAY_ORDER.filter(d => days.includes(d)), start: a, end: b, kind: m[4] ? 'sub' : 'main' });
+  });
+  return { avail, errs };
+}
+/* 1行1人：名前, 役割, 評価, 時給（空欄なら最低賃金）, 出勤できる曜日と時間。タブ区切り（表計算ソフトからの貼り付け）またはカンマ区切り */
 function parseBulk(text, addRoles) {
   const rows = [], errs = [];
   text.split(/\r?\n/).forEach((line, i) => {
     if (!line.trim()) return;
     const c = (line.includes('\t') ? line.split('\t') : line.split(/[,，、]/)).map(x => x.trim().replace(/^"(.*)"$/, '$1'));
     if (['名前', '氏名', 'name'].includes(c[0].toLowerCase())) return;   // 見出し行は読み飛ばす
-    const [name, role = '', rt = '', hr = '', wg = '', st = '', en = '', st2 = '', en2 = ''] = c;
+    const [name, role = '', rt = '', wg = '', av = ''] = c;
     const bad = [];
     if (!name) bad.push('名前がありません');
     let rating = 3;
     if (rt) rating = /^[1-5]$/.test(rt) ? +rt : (/^★{1,5}$/.test(rt) ? rt.length : 0);
     if (!rating) bad.push('評価は1〜5で入力してください');
-    const hours = hr ? +hr.replace(/時間|h/gi, '') : 0;
-    if (!(hours >= 0 && hours <= 24)) bad.push('希望勤務時間は0〜24で入力してください');
-    const wage = wg ? +wg.replace(/[^\d.]/g, '') : 0;
-    if (!(wage >= 0)) bad.push('希望給料は数字で入力してください');
-    const cur = /\$|ドル|usd|dollar/i.test(wg) ? 'USD' : 'JPY';
-    const [a, b, a2, b2] = [st, en, st2, en2].map(parseT);
-    if ([a, b, a2, b2].includes(null)) bad.push('時刻の形式が正しくありません');
-    else {
-      if (!a || !b) bad.push('出勤・退勤時間が必要です');
-      else if (toH(b, true) <= toH(a)) bad.push('退勤は出勤より後にしてください');
-      if (!a2 !== !b2) bad.push('予備の出勤・退勤は両方入力してください');
-      else if (a2 && toH(b2, true) <= toH(a2)) bad.push('予備の退勤は予備の出勤より後にしてください');
-    }
+    const wage = wg ? +wg.replace(/[^\d.]/g, '') : 0, cur = /\$|ドル|usd|dollar/i.test(wg) ? 'USD' : 'JPY';
+    if (!(wage >= 0)) bad.push('時給は数字で入力してください');
+    else if (wage > 0 && cur === 'JPY' && wage < state.settings.minWage) bad.push(`時給が最低賃金（${state.settings.minWage}円）を下回っています`);
+    const { avail, errs: ae } = parseAvail(av);
+    if (!av.trim()) bad.push('出勤できる曜日と時間がありません');
+    bad.push(...ae);
     if (role && !addRoles && !state.roles.some(r => r.name === role)) bad.push(`役割「${role}」は登録されていません`);
     if (bad.length) errs.push(`${i + 1}行目：${bad.join('、')}`);
-    else rows.push({ name, role, rating, hours, wage, cur, start: a, end: b, start2: a2, end2: b2 });
+    else rows.push({ name, role, rating, wage, cur, avail });
   });
   return { rows, errs };
 }
@@ -2049,7 +2138,7 @@ function renderAccounts() {
       (u ? `<div class="meta">ID：${esc(u.id)}${u.last ? ` ／ 最終ログイン ${fmtAt(u.last)}` : ' ／ まだログインしていません'}</div>` : '') + '</div>' +
       (u ? `<button type="button" class="btn small" data-ac="reset" data-s="${s.id}">パスワード再発行</button><button type="button" class="btn small" data-ac="${u.off ? 'on' : 'off'}" data-s="${s.id}">${u.off ? '有効にする' : '無効にする'}</button><button type="button" class="btn small" data-ac="del" data-s="${s.id}">削除</button>`
         : `<button type="button" class="btn small primary" data-ac="issue" data-s="${s.id}">発行</button>`) + '</li>';
-  }).join('') : '<li class="meta">スタッフがまだいません。</li>';
+  }).join('') : '<li class="meta">従業員がまだいません。</li>';
 }
 $('#acList').addEventListener('click', async e => {
   const act = e.target.dataset.ac; if (!act) return;
@@ -2060,7 +2149,7 @@ $('#acList').addEventListener('click', async e => {
     showCreds(`${s.name}さんのアカウント`, '初期パスワードは、この画面でしか確認できません。本人に伝えてから閉じてください（最初のログインで本人が変更します）。', credText([r]));
   } else if (act === 'on' || act === 'off') { u.off = act === 'off'; save(); renderAccounts(); ui.toast(u.off ? 'アカウントを無効にしました' : 'アカウントを有効にしました'); }
   else if (act === 'del') {
-    if (!await ui.ask(`${s.name}さんのアカウントを削除します（スタッフの登録は残ります）。`, { ok: '削除する', danger: true })) return;
+    if (!await ui.ask(`${s.name}さんのアカウントを削除します（従業員の登録は残ります）。`, { ok: '削除する', danger: true })) return;
     AUTH().users = AUTH().users.filter(x => x !== u); save(); renderAccounts(); ui.toast('アカウントを削除しました');
   }
 });
@@ -2114,7 +2203,7 @@ $('#adForm').addEventListener('submit', e => {
 
 /* ========== 初期化 ========== */
 setT('eFrom', '09:00'); setT('eTo', '17:00');
-resetForm(); renderRoles(); renderConditions(); renderSettings(); renderLimits(); renderPeriodSettings(); renderTimeRange(); renderAutoRules(); renderSortBar(); renderShiftSortBar(); renderShiftRules(); renderSetCat(); renderGantt();
+resetForm(); renderRoles(); renderConditions(); renderSettings(); renderLimits(); renderPeriodSettings(); renderTimeRange(); renderAutoRules(); renderSortBar(); renderShiftSortBar(); renderShiftRules(); renderSetCat(); renderMinWage(); renderStaffList(); renderGantt();
 if (state.settings.auto) fetchRate(false);   // ページを開くたびに最新レートを取得
 
 /* ---- 起動：保持されたログインがあれば入り、なければログイン画面（アカウントがなければ、はじめの設定） ---- */
