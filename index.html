@@ -95,6 +95,7 @@
       <div class="actions">
         <label class="check keepchk"><input type="checkbox" id="wKeep" checked> 手で入れたシフト・休みを残す</label>
         <button type="button" class="btn primary" id="wAuto">自動作成</button>
+        <button type="button" class="btn" id="wReport">作成結果</button>
         <button type="button" class="btn" id="wCopy">前の期間をコピー</button>
         <button type="button" class="btn" id="wClear">この期間を空にする</button>
         <button type="button" class="btn primary" id="wPublish">確定する</button>
@@ -171,6 +172,13 @@
               <tbody id="eRulesBody"></tbody>
             </table>
             <div class="actions"><button type="button" class="btn" id="eRuleAdd">ルールを追加</button></div>
+          </div>
+          <div class="card" id="reqCard">
+            <h2>出勤できる曜日・時間</h2>
+            <p id="reqCur" class="meta"></p>
+            <div class="actions"><button type="button" class="btn primary" id="reqOpen">変更を申請する</button></div>
+            <ul id="reqList" class="staff-list"></ul>
+            <p class="meta">申請すると、管理者が確認します。承認されると、新しい曜日・時間が反映されます。</p>
           </div>
           <div class="card" id="ePwCard">
             <h2 id="ePwTitle">パスワード設定</h2>
@@ -270,6 +278,7 @@
         <button type="button" class="btn" id="btnBulk">一括登録</button>
       </div>
     </div>
+    <div id="reqBanner" class="dlbanner" hidden><span id="reqBannerText"></span> <button type="button" class="btn small primary" id="reqReview">確認する</button></div>
     <div class="card tablecard"><div class="tscroll"><div id="staffList"></div></div></div>
   </section>
 
@@ -299,6 +308,27 @@
         <label>締切の初期値（期間の開始日の何日前。0なら設定しない）<input type="number" id="pDlDays" min="0" max="60" step="1"></label>
         <p id="pNote" class="meta"></p>
         <p class="meta">管理者のシフト表と、従業員の希望提出は、この期間ごとに区切られます。</p>
+      </div>
+      <div class="card" id="a2Card">
+        <h2>自動作成の条件（休み・責任者・働く日数）</h2>
+        <p class="meta">自動作成は、期間全体を見渡して、人数が足りない日をなくすことを最優先に、休みの偏りや連続を直しながら作ります。希望休は必ず守ります。</p>
+        <div class="row2">
+          <label>自動で付く休みの連続上限（日）<input type="number" id="a2Rest" min="1" max="14" step="1"></label>
+          <label>勤務の間にあける時間（時間）<input type="number" id="a2Int" min="0" max="16" step="1"></label>
+          <label>週の出勤日数の初期値（最小）<input type="number" id="a2DMin" min="0" max="7" step="1"></label>
+          <label>週の出勤日数の初期値（最大）<input type="number" id="a2DMax" min="0" max="7" step="1"></label>
+          <label>責任者を各時間に置く人数<input type="number" id="a2Lead" min="0" max="5" step="1"></label>
+          <label>計算にかける時間<select id="a2Secs"><option value="1">1秒（すばやく）</option><option value="2">2秒（標準）</option><option value="5">5秒（じっくり）</option><option value="10">10秒（さらにじっくり）</option></select></label>
+        </div>
+        <label class="check"><input type="checkbox" id="a2Flex"> シフトの型に合わない時間も、人手が足りないときは使う</label>
+        <p id="a2Note" class="meta"></p>
+        <p class="meta">「責任者」は、「共通」の役割の管理で、店長・副店長などに印を付けます。0にすると、責任者の配置は見ません。連勤の上限と、1日・週の勤務時間は、下の「シフトの注意ライン」で決めます。</p>
+      </div>
+      <div class="card" id="ptCard">
+        <h2>シフトの型（時間の型・曜日の型）</h2>
+        <p class="meta">早番・遅番など、よく使う時間帯を登録しておくと、自動作成がその型を優先して使います。型は、なくても使えます。人手が足りないときは、型に合わない時間も柔軟に使えます（上の設定）。</p>
+        <div id="ptList" class="ptlist"></div>
+        <div class="actions"><button type="button" class="btn" id="ptAdd">＋ 型を追加</button></div>
       </div>
       <div class="card" id="srCard">
         <h2>日ごとの人数ルール（最低・最高人数）</h2>
@@ -396,6 +426,18 @@
         <p id="mwNote" class="meta"></p>
         <p class="meta">初期値は、大阪府の地域別最低賃金（令和8年10月1日から 1,231円）です。大阪労働局の案内「大阪府最低賃金は、令和8年10月1日から時間額1,231円に改正されます」で確認しています。最低賃金は都道府県ごとに違い、毎年改定されます。お店がある都道府県の額を、厚生労働省や各都道府県の労働局の案内で確かめて、入れてください。</p>
       </div>
+      <div class="card" id="ntCard">
+        <h2>深夜の割増（人件費の計算）</h2>
+        <p class="meta">深夜の時間に働いた分に、割増を加えて人件費を計算します。割増率（％）と、時給に足す金額（円）は、どちらも自由に決められます。</p>
+        <div class="row2">
+          <label>深夜の開始<select id="ntStart"></select></label>
+          <label>深夜の終了<select id="ntEnd"></select></label>
+          <label>割増率（％）<input type="number" id="ntPct" min="0" max="300" step="1"></label>
+          <label>時給に足す金額（円／時間）<input type="number" id="ntPlus" min="0" step="1"></label>
+        </div>
+        <p id="ntNote" class="meta"></p>
+        <p class="meta">初期値は、法律で決まっている「22時〜翌5時に、25％以上の割増賃金」です。会社の決まりに合わせて変えてください。</p>
+      </div>
       <div class="card">
         <h2>役割（階級）の管理</h2>
         <p class="meta">並び順が階級の順です（上ほど上位）。シフト管理の「階級順」の並び替えや、ホームの「役割別」に使われます。</p>
@@ -462,6 +504,23 @@
           <span id="fWageNote" class="wnote"></span>
         </label>
       </div>
+      <div class="row2">
+        <label>雇用区分<select id="fType"><option value="アルバイト">アルバイト</option><option value="パート">パート</option><option value="社員">社員</option><option value="">未設定</option></select></label>
+        <label>生年月日（任意）<input type="date" id="fBirth"></label>
+      </div>
+      <div class="row2">
+        <label>入社日（任意）<input type="date" id="fJoin"></label>
+        <label>退職日（任意）<input type="date" id="fLeave"></label>
+      </div>
+      <div class="row2">
+        <label>週の上限時間（任意）<input type="number" id="fWeekMax" min="1" max="60" step="0.5" placeholder="例 20"></label>
+        <label>月の上限収入・円（任意）<input type="number" id="fIncCap" min="0" step="1000" placeholder="例 88000"></label>
+      </div>
+      <div class="row2">
+        <label>週の出勤日数・希望（最小）<input type="number" id="fDpwMin" min="0" max="7" step="1" placeholder="初期値を使う"></label>
+        <label>週の出勤日数・希望（最大）<input type="number" id="fDpwMax" min="0" max="7" step="1" placeholder="初期値を使う"></label>
+      </div>
+      <p class="meta">生年月日を入れると、18歳未満の人は、22時〜翌5時に自動で入れません。入社日より前・退職日より後には入れません。上限は、扶養や社会保険の基準などで働き方を抑えたい人に使います（基準の数字は各自の状況で違うため、管理者が決めてください）。自動作成で守り、手動で超えると警告が出ます。</p>
       <div class="field">出勤できる曜日と時間
         <div id="fSlots" class="slots"></div>
         <button type="button" class="btn small" id="fSlotAdd">＋ 追加</button>
@@ -472,6 +531,36 @@
         <button type="submit" class="btn primary" id="fSubmit">登録する</button>
       </div>
     </form>
+  </div>
+</div>
+
+<div id="reqModal" class="modal" hidden>
+  <div class="dialog wide pop" role="dialog" aria-modal="true" aria-labelledby="reqTitle">
+    <h2 id="reqTitle">出勤できる曜日・時間の変更申請</h2>
+    <div id="rSlots" class="slots"></div>
+    <button type="button" class="btn small" id="rSlotAdd">＋ 追加</button>
+    <div class="row2">
+      <label>週の出勤日数・希望（最小）<input type="number" id="rDpwMin" min="0" max="7" step="1" placeholder="いまのまま"></label>
+      <label>週の出勤日数・希望（最大）<input type="number" id="rDpwMax" min="0" max="7" step="1" placeholder="いまのまま"></label>
+    </div>
+    <label>管理者へのメッセージ（任意）<textarea id="rNote" rows="3" placeholder="例：来月から授業の時間割が変わるため"></textarea></label>
+    <div class="actions"><button type="button" class="btn" id="rCancel">キャンセル</button><button type="button" class="btn primary" id="rSend">申請する</button></div>
+  </div>
+</div>
+
+<div id="arModal" class="modal" hidden>
+  <div class="dialog wide" role="dialog" aria-modal="true" aria-labelledby="arTitle">
+    <h2 id="arTitle">自動作成の結果</h2>
+    <div id="arBody"></div>
+    <div class="actions"><button type="button" class="btn" id="arRetry">別の案で作り直す</button><button type="button" class="btn primary" id="arClose">閉じる</button></div>
+  </div>
+</div>
+
+<div id="revModal" class="modal" hidden>
+  <div class="dialog wide" role="dialog" aria-modal="true" aria-labelledby="revTitle">
+    <h2 id="revTitle">変更申請の確認</h2>
+    <ul id="revList" class="revlist"></ul>
+    <div class="actions"><button type="button" class="btn" id="revClose">閉じる</button></div>
   </div>
 </div>
 

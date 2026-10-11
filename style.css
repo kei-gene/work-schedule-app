@@ -466,3 +466,33 @@ body[data-layout="mobile"] .emhead{flex-direction:column;align-items:stretch}
 body[data-layout="mobile"] .emtools input,body[data-layout="mobile"] .emtools select{flex:1;min-width:0}
 body[data-layout="mobile"] .emtable th:nth-child(4),body[data-layout="mobile"] .emtable td:nth-child(4){display:none}
 body[data-layout="mobile"] .dchip{width:38px;height:38px}
+
+.scell.na{background:#eceff2;color:#9aa5b1;cursor:default}
+.emtable .nm .sub{font-size:11px;color:var(--sub);margin-top:2px;line-height:1.5}
+.revlist{list-style:none;margin:0 0 10px;padding:0}
+.revlist li{border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;background:#fafbfc}
+.revlist .cmp{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;margin:8px 0;font-size:13px}
+.revlist .cmp b{color:var(--sub);font-weight:400}
+.revlist .cmt{margin:6px 0}
+.revlist input{margin:6px 0 8px}
+.reqst{font-size:12px;font-weight:700}
+.reqst.pending{color:#8a5a00}.reqst.approved{color:#0a5555}.reqst.rejected{color:#b3261e}
+
+.ptlist{display:flex;flex-direction:column;gap:10px;margin-bottom:10px}
+.pt{border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;background:#fafbfc}
+.pt-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pt-top input[type=text]{width:9em;margin:0}
+.pt-time{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px}
+.pt-time .time{width:128px;margin:0}
+#arBody h3{margin:16px 0 6px;font-size:14px}
+#arBody .sum{padding:10px 14px;background:#e6f2f1;border:1px solid #b9dad7;border-radius:var(--radius);font-size:13px;line-height:1.8}
+#arBody .sum.bad{background:#fde8e1;border-color:#e9b3a1}
+#arBody table{width:100%;border-collapse:collapse;font-size:12.5px}
+#arBody th,#arBody td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+#arBody th{color:var(--sub);font-weight:400;background:#f5f7f9}
+.arday{border:1px solid #e9b3a1;border-left:4px solid #e5675b;border-radius:var(--radius);padding:10px 12px;margin-bottom:10px;background:#fffaf8}
+.arday .cands{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.arday .cand{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
+.arday .last{color:var(--sub);font-size:12px;margin-top:8px}
+.rlead{display:flex;align-items:center;gap:4px;font-size:12px;margin:0;color:var(--sub);white-space:nowrap}
+.rlead input{width:auto;margin:0}
