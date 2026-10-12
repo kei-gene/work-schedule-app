@@ -1469,7 +1469,7 @@ function autoShiftsV2(p, keep, seedOffset) {
   if (!N || !D || !Hn) return init;
   const rng = prng32(strSeed(pk + ':' + N + ':' + (seedOffset || 0))), rint = n => Math.floor(rng() * n);   // 同じ条件なら同じ案。「別の案」は番号を変える
   const lv = x => [0, 0.5, 1, 2][x] || 0, h0 = H[0];
-  const W = { short: 100, dayShort: 120, over: 20, sur: R.fill === 'max' ? 0 : 1.5, lead: 40, hard: 80, int: 40, rest: 25, days: 8, fair: 8 * lv(R.fair), fairWe: 4 * lv(R.fair), income: 30,
+  const W = { short: 100, dayShort: 120, over: 20, sur: R.fill === 'max' ? 0 : 1.5, lead: 40, hard: 300, int: 100, rest: 25, days: 8, fair: 8 * lv(R.fair), fairWe: 4 * lv(R.fair), income: 30,
     sub: R.sub === 'never' ? 30 : R.sub === 'always' ? 0 : 3, flex: 3, cost: [0, 0.002, 0.006, 0.015][R.wage] || 0, rate: [0, 0.1, 0.2, 0.4][R.rating] || 0 };
   const patterns = state.patterns.filter(x => x.start && x.end && x.days.length);
   const dow = keys.map(k => parseYmd(k).getDay()), isWE = dow.map(x => x === 0 || x === 6);
@@ -1484,7 +1484,7 @@ function autoShiftsV2(p, keep, seedOffset) {
   const dayRule = keys.map(k => dayRuleOf(k));
 
   // ---- 候補（誰が・どの日に・どの時間帯で入れるか）----
-  const cands = new Array(N * D), fixedRec = new Array(N * D), fixedCand = new Array(N * D), autoOffOk = new Uint8Array(N * D), hasCand = new Uint8Array(N), weEl = new Uint8Array(N);
+  const cands = new Array(N * D), fixedRec = new Array(N * D), fixedCand = new Array(N * D), autoOffOk = new Uint8Array(N * D), hasCand = new Uint8Array(N), weEl = new Uint8Array(N), autoCnt = new Uint8Array(N * D);   // autoCnt：出勤できたのに入らなかった日（自動の休みとして数える）
   const mkCand = (s, a, b, pat, subSet) => {
     const len = b - a, brk = legalBreak(len), work = len - brk / 60;
     if (work > S.limitDay + 1e-9 && !pat) return null;
@@ -1495,7 +1495,7 @@ function autoShiftsV2(p, keep, seedOffset) {
   E.forEach((s, e) => keys.forEach((k, d) => {
     const i = e * D + d, rec = dayShifts(k)[s.id], fx = rec && !rec.auto ? rec : null, pref = adminPref(s.id, k, pk), emp = employedOn(s, k);
     fixedRec[i] = fx; autoOffOk[i] = (emp && pref.status !== 'off') ? 1 : 0; cands[i] = [];
-    if (fx) { if (isWork(fx)) { const a = Math.floor(tmin(fx.start) / 60), b = Math.ceil(tmin(fx.end) / 60); fixedCand[i] = mkCand(s, a, b, true, new Set()) || { a, b, len: b - a, brk: fx.brk || 0, work: shiftHours(fx), pat: true, cost: shiftCost(s, fx), base: 0 }; fixedCand[i].base = 0; } return; }
+    if (fx) { if (!isWork(fx)) autoCnt[i] = 1; if (isWork(fx)) { const a = Math.floor(tmin(fx.start) / 60), b = Math.ceil(tmin(fx.end) / 60); fixedCand[i] = mkCand(s, a, b, true, new Set()) || { a, b, len: b - a, brk: fx.brk || 0, work: shiftHours(fx), pat: true, cost: shiftCost(s, fx), base: 0 }; fixedCand[i].base = 0; } return; }
     if (!emp || pref.status === 'off') return;
     let main = mainHours(s, k).filter(h => H.includes(h)), sub = subHours(s, k).filter(h => H.includes(h));
     if (pref.status === 'time') { const lo = toH(pref.start), hi = toH(pref.end, true); main = main.filter(h => h >= lo && h < hi); sub = sub.filter(h => h >= lo && h < hi); }
@@ -1513,7 +1513,7 @@ function autoShiftsV2(p, keep, seedOffset) {
       }
     }
     if (list.length > 60) { const pats = list.filter(c => c.pat), free = list.filter(c => !c.pat); for (let j = free.length - 1; j > 0; j--) { const r = rint(j + 1); [free[j], free[r]] = [free[r], free[j]]; } list = pats.concat(free.slice(0, 60 - pats.length)); }
-    cands[i] = list; if (list.length) { hasCand[e] = 1; if (isWE[d]) weEl[e] = 1; }
+    cands[i] = list; if (list.length) { hasCand[e] = 1; autoCnt[i] = 1; if (isWE[d]) weEl[e] = 1; }
   }));
 
   // ---- 状態 ----
@@ -1523,6 +1523,7 @@ function autoShiftsV2(p, keep, seedOffset) {
     const i = e * D + d, rec = dayShifts(k)[s.id]; if (fixedRec[i] || !isWork(rec)) return;
     const a = Math.floor(tmin(rec.start) / 60), b = Math.ceil(tmin(rec.end) / 60);
     let ci = cands[i].findIndex(c => c.a === a && c.b === b);
+    autoCnt[i] = 1;
     if (ci < 0) { const c = mkCand(s, a, b, false, new Set()) || { a, b, len: b - a, brk: rec.brk || 0, work: shiftHours(rec), pat: false, cost: shiftCost(s, rec), base: 0 }; cands[i].push(c); ci = cands[i].length - 1; hasCand[e] = 1; }
     cur[i] = ci;
   }));
@@ -1568,7 +1569,7 @@ function autoShiftsV2(p, keep, seedOffset) {
         wCnt[wk[d]]++; wHr[wk[d]] += cd.work; inc[mi[d]] += cd.cost; c += cd.base;
         if (prevEnd >= 0) { const gap = 24 - prevEnd + cd.a; if (gap < A.interval) c += W.int * (A.interval - gap); }
         prevEnd = cd.b; if (autoOff > A.restMax) c += W.rest * (autoOff - A.restMax); autoOff = 0;
-      } else { run = 0; prevEnd = -1; if (autoOffOk[e * D + d]) autoOff++; }
+      } else { run = 0; prevEnd = -1; if (autoCnt[e * D + d]) autoOff++; }
     }
     if (autoOff > A.restMax) c += W.rest * (autoOff - A.restMax);
     for (let w = 0; w < nW; w++) {
@@ -1650,12 +1651,13 @@ function autoShiftsV2(p, keep, seedOffset) {
   });
 
   // ---- 結果のまとめ（足りない日・理由・相談できる人・公平さ）----
-  const shortages = [];
+  const shortages = []; let leadHours = 0, leadDays = 0;
   keys.forEach((k, d) => {
     const hrs = [], b = d * Hn; for (let i = 0; i < Hn; i++) if (cov[b + i] < rmin[i]) hrs.push({ h: H[i], need: rmin[i], have: cov[b + i] });
     const dr = dayRule[d], dayShort = dr && workers[d] < dr.min ? dr.min - workers[d] : 0;
     let leadShort = 0; if (leadMin) for (let i = 0; i < Hn; i++) if (lcov[b + i] < leadMin) leadShort++;
-    if (hrs.length || dayShort || leadShort) shortages.push({ k, d, hrs, dayShort, leadShort });
+    if (leadShort) { leadHours += leadShort; leadDays++; }
+    if (hrs.length || dayShort) shortages.push({ k, d, hrs, dayShort, leadShort });
   });
   shortages.sort((x, y) => (y.hrs.length + y.dayShort * 3) - (x.hrs.length + x.dayShort * 3));
   shortages.slice(0, 12).forEach(sd => {
@@ -1676,7 +1678,7 @@ function autoShiftsV2(p, keep, seedOffset) {
     sd.avail = E.filter((s, e) => cands[e * D + d].length).length;
   });
   const fair = E.map((s, e) => {
-    let hrs = 0, run = 0, maxRun = 0, subH = 0; for (let d = 0; d < D; d++) { const c = candAt(e, d); if (c) { hrs += c.work; run = 0; } else if (autoOffOk[e * D + d] && !fixedRec[e * D + d]) { run++; maxRun = Math.max(maxRun, run); } else if (!autoOffOk[e * D + d]) { /* 希望休・在籍外 */ } }
+    let hrs = 0, run = 0, maxRun = 0, subH = 0; for (let d = 0; d < D; d++) { const c = candAt(e, d); if (c) { hrs += c.work; run = 0; } else if (autoCnt[e * D + d]) { run++; maxRun = Math.max(maxRun, run); } }
     return { id: s.id, name: s.name, role: s.role, days: days[e], hours: hrs, we: we[e], lo: dlo[e], hi: dhi[e], maxOff: maxRun, weeks: D / 7 };
   });
   let streakV = 0, intV = 0, restV = 0, flexN = 0, patN = 0, subN = 0;
@@ -1684,10 +1686,10 @@ function autoShiftsV2(p, keep, seedOffset) {
     let run = preRun[e], prevEnd = preEnd[e], auto = 0;
     for (let d = 0; d < D; d++) { const c = candAt(e, d);
       if (c) { run++; if (run > S.maxStreak) streakV++; if (prevEnd >= 0 && 24 - prevEnd + c.a < A.interval) intV++; prevEnd = c.b; if (auto > A.restMax) restV++; auto = 0; if (!fixedRec[e * D + d]) { if (patterns.length) { if (c.pat) patN++; else flexN++; } } }
-      else { run = 0; prevEnd = -1; if (autoOffOk[e * D + d]) auto++; } }
+      else { run = 0; prevEnd = -1; if (autoCnt[e * D + d]) auto++; } }
     if (auto > A.restMax) restV++;
   });
-  lastReport = { at: Date.now(), label: pLabel(p), pk, ms: Math.round(nowMs() - t0), iters, startCost: Math.round(startCost), endCost: Math.round(total), shortages, fair, streakV, intV, restV, flexN, patN, leadMin, patterns: patterns.length, restMax: A.restMax, interval: A.interval };
+  lastReport = { at: Date.now(), label: pLabel(p), pk, ms: Math.round(nowMs() - t0), iters, startCost: Math.round(startCost), endCost: Math.round(total), shortages, fair, streakV, intV, restV, flexN, patN, leadMin, leadHours, leadDays, patterns: patterns.length, restMax: A.restMax, interval: A.interval };
   const shortDays = shortages.map(x => x.k);
   return { shortDays, relaxed: init.relaxed, report: lastReport };
 }
@@ -1724,13 +1726,14 @@ function renderReport() {
   const bad = r.shortages.length, dn = k => { const d = parseYmd(k); return `${d.getMonth() + 1}/${d.getDate()}（${DOW[d.getDay()]}）`; };
   let html = `<div class="sum${bad ? ' bad' : ''}"><b>${esc(r.label)}</b>　計算 ${(r.ms / 1000).toFixed(1)}秒（${r.iters.toLocaleString()}回の入れ替え）<br>` +
     (bad ? `⚠ 人数が足りない日が${bad}日あります。` : '✓ 人数が足りない日はありません。') + `<br>連勤の上限超え ${r.streakV}件 ／ 勤務の間の時間が足りない ${r.intV}件 ／ 自動の休みの連続（${r.restMax}日超え）${r.restV}件` +
-    (r.patterns ? ` ／ 型に合わせた勤務 ${r.patN}件・型に合わない勤務 ${r.flexN}件` : '') + '</div>';
+    (r.patterns ? ` ／ 型に合わせた勤務 ${r.patN}件・型に合わない勤務 ${r.flexN}件` : '') +
+    (r.leadMin ? `<br>責任者がいない時間：${r.leadHours}時間（${r.leadDays}日）${r.leadHours ? '　※責任者の人数や出勤日数が足りないときは、役割の見直しか、「責任者を各時間に置く人数」の調整が必要です' : ''}` : '') + '</div>';
   if (bad) {
     html += '<h3>人数が足りない日（理由と、相談できる人）</h3>';
     r.shortages.slice(0, 12).forEach(sd => {
-      const why = [sd.hrs.length ? '足りない時間帯：' + sd.hrs.slice(0, 6).map(x => `${x.h}時台（${x.have}/${x.need}人）`).join('、') + (sd.hrs.length > 6 ? '…' : '') : '', sd.dayShort ? `1日の人数があと${sd.dayShort}人` : '', sd.leadShort ? `責任者がいない時間が${sd.leadShort}時間` : ''].filter(Boolean).join(' ／ ');
+      const why = [sd.hrs.length ? '足りない時間帯：' + sd.hrs.slice(0, 6).map(x => `${x.h}時台（${x.have}/${x.need}人）`).join('、') + (sd.hrs.length > 6 ? '…' : '') : '', sd.dayShort ? `1日の人数があと${sd.dayShort}人` : '', ''].filter(Boolean).join(' ／ ');
       html += `<div class="arday"><b>${dn(sd.k)}</b>　${esc(why)}<div class="meta">この日に出勤できる従業員（休みの指定の人）：${sd.avail ?? 0}人</div>`;
-      html += sd.cands && sd.cands.length ? '<div class="cands"><span class="meta">まず相談する人（休みの指定になっている人。影響が小さい順）</span>' + sd.cands.map(c => `<div class="cand"><b>${esc(c.name)}</b> ${c.a}:00–${c.b}:00 <span class="meta">影響 ${c.delta >= 0 ? '+' : ''}${Math.round(c.delta)}点</span> <button type="button" class="btn small" data-ar="${c.id}|${sd.k}|${c.a}|${c.b}">この人に入れる</button></div>`).join('') + '</div>' : '<div class="meta">この日に出られる人が、ほかにいません。</div>';
+      html += sd.cands && sd.cands.length ? '<div class="cands"><span class="meta">まず相談する人（休みの指定になっている人。影響が小さい順）</span>' + sd.cands.map(c => `<div class="cand"><b>${esc(c.name)}</b> ${c.a}:00–${c.b}:00 <span class="meta">影響 ${c.delta >= 0 ? '+' : ''}${Math.round(c.delta)}点</span> <button type="button" class="btn small" data-ar="${c.id}|${sd.k}|${c.a}|${c.b}">この人に入れる</button></div>`).join('') + '</div>' : '<div class="meta">不足の時間帯に出られる人が、ほかにいません（希望休の人をのぞく）。</div>';
       if (sd.last && sd.last.length) html += '<div class="last">最後の手段（希望休の人。原則はお願いしません）：' + sd.last.map(c => `${esc(c.name)} ${c.a}:00–${c.b}:00 <button type="button" class="btn small" data-ar="${c.id}|${sd.k}|${c.a}|${c.b}">確認して入れる</button>`).join('　') + '</div>';
       html += '</div>';
     });
@@ -2072,6 +2075,8 @@ function pickDays(type) {
 /* 1人分：出勤できる曜日と時間（複数の時間帯・予備つき）、時給（多くの人は最低賃金のまま）を作る */
 function buildStaff(sp, st, en, isBoss, used, idx, days) {
   const open = state.open, close = state.close, min = state.settings.minWage;
+  const pats = (state.patterns || []).filter(x => x.start && x.end);   // シフトの型があるときは、多くの人が型に近い時間帯で出られる設定にする（現実の募集に近づける）
+  if (pats.length && !isBoss && Math.random() < 0.7) { let best = null, bo = 0; pats.forEach(x => { const a = toH(x.start), b = toH(x.end, true), ov = Math.min(b, en) - Math.max(a, st); if (ov > bo) { bo = ov; best = x; } }); if (best) { st = toH(best.start); en = toH(best.end, true); } }
   const minor = !isBoss && sp.max == null && sp.rating[1] <= 4 && Math.random() < 0.07;   // 高校生など（18歳未満）：22時〜翌5時には出られない
   if (minor) { en = Math.min(en, 22); st = Math.max(Math.min(st, en - 4), Math.max(open, 5)); if (en - st < 3) { st = Math.max(open, 5); en = Math.min(22, st + 4); } }
   let name, tries = 0;
