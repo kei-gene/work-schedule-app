@@ -289,9 +289,10 @@
       <button type="button" class="scbtn" data-cat="auto">自動作成</button>
       <button type="button" class="scbtn" data-cat="common">共通</button>
       <button type="button" class="scbtn" data-cat="account">アカウント</button>
+      <label class="helpsel">説明の表示<select id="helpDef"><option value="open">表示する</option><option value="closed">畳む</option></select></label>
     </nav>
     <div class="setcat" data-cat="shift">
-      <p class="catdesc"><b>シフト</b>　日ごとのシフト（誰がどの日に働くか）に関する設定です。シフト管理タブの表・希望の提出・シフトの自動作成に反映されます。</p>
+      <p class="catdesc help"><b>シフト</b>　日ごとのシフト（誰がどの日に働くか）に関する設定です。シフト管理タブの表・希望の提出・シフトの自動作成に反映されます。</p>
       <div class="cols">
       <div class="card">
         <h2>シフト表の期間・提出締切</h2>
@@ -307,11 +308,11 @@
         </div>
         <label>締切の初期値（期間の開始日の何日前。0なら設定しない）<input type="number" id="pDlDays" min="0" max="60" step="1"></label>
         <p id="pNote" class="meta"></p>
-        <p class="meta">管理者のシフト表と、従業員の希望提出は、この期間ごとに区切られます。</p>
+        <p class="meta help">管理者のシフト表と、従業員の希望提出は、この期間ごとに区切られます。</p>
       </div>
       <div class="card" id="a2Card">
         <h2>自動作成の条件（休み・責任者・働く日数）</h2>
-        <p class="meta">自動作成は、期間全体を見渡して、人数が足りない日をなくすことを最優先に、休みの偏りや連続を直しながら作ります。希望休は必ず守ります。</p>
+        <p class="meta help">自動作成は、期間全体を見渡して、人数が足りない日をなくすことを最優先に、休みの偏りや連続を直しながら作ります。希望休は必ず守ります。</p>
         <div class="row2">
           <label>自動で付く休みの連続上限（日）<input type="number" id="a2Rest" min="1" max="14" step="1"></label>
           <label>勤務の間にあける時間（時間）<input type="number" id="a2Int" min="0" max="16" step="1"></label>
@@ -322,17 +323,17 @@
         </div>
         <label class="check"><input type="checkbox" id="a2Flex"> シフトの型に合わない時間も、人手が足りないときは使う</label>
         <p id="a2Note" class="meta"></p>
-        <p class="meta">「責任者」は、「共通」の役割の管理で、店長・副店長などに印を付けます。0にすると、責任者の配置は見ません。連勤の上限と、1日・週の勤務時間は、下の「シフトの注意ライン」で決めます。</p>
+        <p class="meta help">「責任者」は、「共通」の役割の管理で、店長・副店長などに印を付けます。0にすると、責任者の配置は見ません。連勤の上限と、1日・週の勤務時間は、下の「シフトの注意ライン」で決めます。</p>
       </div>
       <div class="card" id="ptCard">
         <h2>シフトの型（時間の型・曜日の型）</h2>
-        <p class="meta">早番・遅番など、よく使う時間帯を登録しておくと、自動作成がその型を優先して使います。型は、なくても使えます。人手が足りないときは、型に合わない時間も柔軟に使えます（上の設定）。</p>
+        <p class="meta help">早番・遅番など、よく使う時間帯を登録しておくと、自動作成がその型を優先して使います。型は、なくても使えます。人手が足りないときは、型に合わない時間も柔軟に使えます（上の設定）。</p>
         <div id="ptList" class="ptlist"></div>
         <div class="actions"><button type="button" class="btn" id="ptAdd">＋ 型を追加</button></div>
       </div>
       <div class="card" id="srCard">
         <h2>日ごとの人数ルール（最低・最高人数）</h2>
-        <p class="meta">1日に出勤する人数の、最低と最高を決めます。平日・週末・毎日・曜日・月ごとなど、自由に組み合わせられます。ここで決めた人数は、シフト管理の表と自動作成に反映されます。</p>
+        <p class="meta help">1日に出勤する人数の、最低と最高を決めます。平日・週末・毎日・曜日・月ごとなど、自由に組み合わせられます。ここで決めた人数は、シフト管理の表と自動作成に反映されます。</p>
         <div class="tscroll">
           <table class="rules sr">
             <thead><tr><th>対象の日</th><th>月</th><th>日付</th><th>最低</th><th>最高</th><th></th></tr></thead>
@@ -349,12 +350,12 @@
           <label>1週間の勤務時間（時間）<input type="number" id="limWeek" min="0.5" max="168" step="0.5"></label>
         </div>
         <label>連続勤務の上限（日）<input type="number" id="limStreak" min="1" max="30" step="1"></label>
-        <p class="meta">超えるとシフト管理の表に ⚠ が付き、自動作成でもこの範囲を守ります（連続勤務の上限も同様）。初期値は法定労働時間の原則（1日8時間・週40時間）です。事業所の規模や労使協定で上限が異なる場合があるため、実際の運用では厚生労働省の案内などで確認してください。</p>
+        <p class="meta help">超えるとシフト管理の表に ⚠ が付き、自動作成でもこの範囲を守ります（連続勤務の上限も同様）。初期値は法定労働時間の原則（1日8時間・週40時間）です。事業所の規模や労使協定で上限が異なる場合があるため、実際の運用では厚生労働省の案内などで確認してください。</p>
       </div>
       </div>
     </div>
     <div class="setcat" data-cat="work" hidden>
-      <p class="catdesc"><b>作業スケジュール</b>　1日の中の時間帯ごとの作業表（何時に何人いるか）に関する設定です。ホームの作業表に反映されます。</p>
+      <p class="catdesc help"><b>作業スケジュール</b>　1日の中の時間帯ごとの作業表（何時に何人いるか）に関する設定です。ホームの作業表に反映されます。</p>
       <div class="cols">
       <div class="card">
         <h2>表の表示時間</h2>
@@ -365,11 +366,11 @@
           <button type="button" class="btn small" data-step="close:-1" aria-label="終了を1時間早める">−</button><b id="vClose"></b>
           <button type="button" class="btn small" data-step="close:1" aria-label="終了を1時間遅らせる">＋</button></div>
         <p id="rangeNote" class="meta"></p>
-        <p class="meta">例：25:00の列まで表示したいときは、終了を26:00にします。人数の設定や自動作成も、この範囲が対象です。</p>
+        <p class="meta help">例：25:00の列まで表示したいときは、終了を26:00にします。人数の設定や自動作成も、この範囲が対象です。</p>
       </div>
       <div class="card">
         <h2>時間帯ごとの人数（最低・最高）</h2>
-        <p class="meta">1日の中の時間帯ごとに、何人いてほしいかを決めます。ホームの作業表の人数チェックに使われます。作業表の自動作成は、シフトの時間に必ず合わせたうえで、この人数が保てるように休憩の位置を調整します。</p>
+        <p class="meta help">1日の中の時間帯ごとに、何人いてほしいかを決めます。ホームの作業表の人数チェックに使われます。作業表の自動作成は、シフトの時間に必ず合わせたうえで、この人数が保てるように休憩の位置を調整します。</p>
         <div class="bulk">
           <b>一括設定</b>
           <div class="bulk-row">
@@ -388,16 +389,16 @@
           <thead><tr><th>役割</th><th>最低人数</th><th>最高人数</th></tr></thead>
           <tbody id="roleRuleBody"></tbody>
         </table>
-        <p class="meta">最高人数を空欄にすると上限なしです。役割は設定タブで追加・編集できます。</p>
+        <p class="meta help">最高人数を空欄にすると上限なしです。役割は設定タブで追加・編集できます。</p>
       </div>
       </div>
     </div>
     <div class="setcat" data-cat="auto" hidden>
-      <p class="catdesc"><b>自動作成</b>　シフトの自動作成のルールです。作業表は、できあがったシフトに合わせて自動で作られます。</p>
+      <p class="catdesc help"><b>自動作成</b>　シフトの自動作成のルールです。作業表は、できあがったシフトに合わせて自動で作られます。</p>
       <div class="cols">
       <div class="card">
         <h2>自動作成のルール</h2>
-        <p class="meta">シフトの自動作成に使うルールです。作業表は、できあがったシフトに合わせて自動で作られます。<b>どのタイプでも、希望休は必ず守ります。</b></p>
+        <p class="meta help">シフトの自動作成に使うルールです。作業表は、できあがったシフトに合わせて自動で作られます。<b>どのタイプでも、希望休は必ず守ります。</b></p>
         <label>ルールのタイプ<select id="aPreset"></select></label>
         <p id="aDesc" class="meta"></p>
         <div class="row2">
@@ -414,21 +415,21 @@
       </div>
     </div>
     <div class="setcat" data-cat="common" hidden>
-      <p class="catdesc"><b>共通</b>　役割（階級）・最低賃金・通貨など、アプリ全体に関わる設定です。</p>
+      <p class="catdesc help"><b>共通</b>　役割（階級）・最低賃金・通貨など、アプリ全体に関わる設定です。</p>
       <div class="cols">
       <div class="card" id="mwCard">
         <h2>最低賃金（時給）</h2>
-        <p class="meta">従業員の時給は、管理者が決めます。時給を空欄にした従業員は、ここで決めた最低賃金で人件費を計算します。</p>
+        <p class="meta help">従業員の時給は、管理者が決めます。時給を空欄にした従業員は、ここで決めた最低賃金で人件費を計算します。</p>
         <div class="row2">
           <label>地域<input type="text" id="mwArea" placeholder="例 大阪府" maxlength="20"></label>
           <label>最低賃金（円／時間）<input type="number" id="mwVal" min="0" step="1"></label>
         </div>
         <p id="mwNote" class="meta"></p>
-        <p class="meta">初期値は、大阪府の地域別最低賃金（令和8年10月1日から 1,231円）です。大阪労働局の案内「大阪府最低賃金は、令和8年10月1日から時間額1,231円に改正されます」で確認しています。最低賃金は都道府県ごとに違い、毎年改定されます。お店がある都道府県の額を、厚生労働省や各都道府県の労働局の案内で確かめて、入れてください。</p>
+        <p class="meta help">初期値は、大阪府の地域別最低賃金（令和8年10月1日から 1,231円）です。大阪労働局の案内「大阪府最低賃金は、令和8年10月1日から時間額1,231円に改正されます」で確認しています。最低賃金は都道府県ごとに違い、毎年改定されます。お店がある都道府県の額を、厚生労働省や各都道府県の労働局の案内で確かめて、入れてください。</p>
       </div>
       <div class="card" id="ntCard">
         <h2>深夜の割増（人件費の計算）</h2>
-        <p class="meta">深夜の時間に働いた分に、割増を加えて人件費を計算します。割増率（％）と、時給に足す金額（円）は、どちらも自由に決められます。</p>
+        <p class="meta help">深夜の時間に働いた分に、割増を加えて人件費を計算します。割増率（％）と、時給に足す金額（円）は、どちらも自由に決められます。</p>
         <div class="row2">
           <label>深夜の開始<select id="ntStart"></select></label>
           <label>深夜の終了<select id="ntEnd"></select></label>
@@ -436,11 +437,11 @@
           <label>時給に足す金額（円／時間）<input type="number" id="ntPlus" min="0" step="1"></label>
         </div>
         <p id="ntNote" class="meta"></p>
-        <p class="meta">初期値は、法律で決まっている「22時〜翌5時に、25％以上の割増賃金」です。会社の決まりに合わせて変えてください。</p>
+        <p class="meta help">初期値は、法律で決まっている「22時〜翌5時に、25％以上の割増賃金」です。会社の決まりに合わせて変えてください。</p>
       </div>
       <div class="card">
         <h2>役割（階級）の管理</h2>
-        <p class="meta">並び順が階級の順です（上ほど上位）。シフト管理の「階級順」の並び替えや、ホームの「役割別」に使われます。</p>
+        <p class="meta help">並び順が階級の順です（上ほど上位）。シフト管理の「階級順」の並び替えや、ホームの「役割別」に使われます。</p>
         <form id="roleForm" class="role-form" autocomplete="off">
           <input type="text" id="rName" placeholder="役割の名前（例 レジ）" maxlength="12">
           <input type="color" id="rColor" value="#0f6e6e" aria-label="色">
@@ -459,16 +460,16 @@
           <div class="wage"><input type="number" id="sRate" min="0.01" step="0.01"><button type="button" class="btn" id="sFetch">今すぐ更新</button></div>
         </label>
         <p id="rateStatus" class="meta"></p>
-        <p class="meta">従業員ごとに時給を円・ドルのどちらでも入力でき、人件費は表示通貨に換算して集計します。自動取得をオフにすると、レートを手入力できます。</p>
+        <p class="meta help">従業員ごとに時給を円・ドルのどちらでも入力でき、人件費は表示通貨に換算して集計します。自動取得をオフにすると、レートを手入力できます。</p>
       </div>
       </div>
     </div>
     <div class="setcat" data-cat="account" hidden>
-      <p class="catdesc"><b>アカウント</b>　従業員がログインするためのIDとパスワードを管理します。</p>
+      <p class="catdesc help"><b>アカウント</b>　従業員がログインするためのIDとパスワードを管理します。</p>
       <div class="cols">
       <div class="card" id="acCard">
         <h2>従業員アカウント</h2>
-        <p class="meta">従業員がログインするためのIDとパスワードを発行します。初期パスワードは、発行したその画面でしか確認できません。従業員は、最初のログインで自分のパスワードに変更します。</p>
+        <p class="meta help">従業員がログインするためのIDとパスワードを発行します。初期パスワードは、発行したその画面でしか確認できません。従業員は、最初のログインで自分のパスワードに変更します。</p>
         <div class="actions"><button type="button" class="btn primary" id="acAll">未発行の全員に発行</button></div>
         <ul id="acList" class="staff-list"></ul>
       </div>
@@ -531,6 +532,16 @@
         <button type="submit" class="btn primary" id="fSubmit">登録する</button>
       </div>
     </form>
+  </div>
+</div>
+
+<div id="busy" class="busy" hidden role="alert" aria-live="assertive">
+  <div class="busy-card">
+    <div class="spin" aria-hidden="true"></div>
+    <p id="busyMsg" class="busy-msg">シフトを自動作成しています…</p>
+    <div class="bar"><i id="busyBar"></i></div>
+    <p id="busySub" class="meta"></p>
+    <button type="button" class="btn" id="busyStop">ここまでで止める</button>
   </div>
 </div>
 

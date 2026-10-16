@@ -49,7 +49,9 @@ function load() {
   if (!s.settings.night) s.settings.night = { start: 22, end: 5, pct: 25, plus: 0 };   // 深夜の割増（時間帯・％・加算の円は、管理者が変えられる）
   s.requests = s.requests || [];   // 出勤できる曜日・時間の変更申請 [{ id, staffId, at, avail, dpw, note, status, reply }]
   if (!s.settings.auto2) s.settings.auto2 = { restMax: 2, interval: 9, dpw: { min: 3, max: 5 }, leadMin: 1, secs: 2, flex: true };   // 自動作成の条件
-  s.patterns = s.patterns || [];   // シフトの型 [{ id, name, start, end, days }]   // 最低賃金：大阪府（令和8年10月1日〜）。設定で変えられる
+  s.patterns = s.patterns || [];   // シフトの型 [{ id, name, start, end, days }]
+  if (!s.settings.helpDef) s.settings.helpDef = 'open';   // 設定の説明文：'open' 表示する ／ 'closed' 畳む
+  s.settings.helpOpen = s.settings.helpOpen || {};        // カードごとに開閉を変えたとき { カードID: true/false }   // 最低賃金：大阪府（令和8年10月1日〜）。設定で変えられる
   if (s.settings.sort && s.settings.sort.key === 'shortage') s.settings.sort = { key: 'manual', desc: false };
   s.staff.forEach(x => {
     if (!x.avail) {
@@ -367,7 +369,7 @@ function renderWork(keep) {
     html += '</tr>';
   });
   html += '</tbody><tfoot><tr><th class="name">配置人数<small>最低〜最高（休憩中は除く）</small></th>';
-  H.forEach(h => { const c = rows.filter(s => (work[s.id] || []).includes(h)).length, r = rule(h); html += `<td class="${c < r.min ? 'low' : c > r.max ? 'high' : ''}">${c}<small>${r.min}〜${r.max}</small></td>`; });
+  H.forEach(h => { const c = rows.filter(s => (work[s.id] || []).includes(h)).length, r = rule(h); html += `<td class="${c < r.min ? 'low' : c > r.max ? 'high' : ''}"${c < r.min ? ` data-tip="${esc(`${h}時台：${c}人（最低${r.min}人）\nあと${r.min - c}人（休憩中の人は含みません）`)}"` : ''}>${c}<small>${r.min}〜${r.max}</small></td>`; });
   html += '</tr>';
   state.roles.forEach(ro => {
     const q = state.roleRules[ro.name];
@@ -1167,7 +1169,8 @@ function renderLackLine(keys) {
   const el = $('#wLack'), active = keys.some(hasShifts);
   const lack = active ? keys.filter(k => dayStat(k).lack) : [];
   el.hidden = !lack.length;
-  el.textContent = lack.length ? `⚠ 人数が足りない日が${lack.length}日あります：${lack.slice(0, 8).map(mdText).join('、')}${lack.length > 8 ? `…ほか${lack.length - 8}日` : ''}` : '';
+  el.innerHTML = lack.length ? `⚠ 人数が足りない日が${lack.length}日あります（日付にカーソルを当てる、またはタップすると、どこが足りないかが見られます）<br>` +
+    lack.slice(0, 14).map(k => `<span class="tipchip" data-tip="${esc(tipOf(k))}">${mdText(k)}</span>`).join('') + (lack.length > 14 ? `…ほか${lack.length - 14}日` : '') : '';
 }
 
 function dayCover(k) {   // その日の、時間ごとの配置人数
@@ -1181,6 +1184,20 @@ function dayCover(k) {   // その日の、時間ごとの配置人数
   });
   return { n, cnt, roleAt, H };
 }
+/* 人数が足りない日の、「どこが・どれだけ」足りないかの説明（カーソルを当てると見られる） */
+function shortDetail(k) {
+  const c = dayCover(k), H = c.H, dr = dayRuleOf(k), L = [];
+  const rng = hs => { const out = []; let a = null, b = null; hs.forEach(h => { if (a === null) a = b = h; else if (h === b + 1) b = h; else { out.push([a, b]); a = b = h; } }); if (a !== null) out.push([a, b]); return out.map(([x, y]) => x === y ? `${x}時台` : `${x}〜${y}時台`).join('、'); };
+  const hs = H.filter(h => c.cnt[h] < rule(h).min);
+  if (hs.length) { L.push(`時間帯の人数が足りません：${rng(hs)}`); hs.slice(0, 6).forEach(h => L.push(`・${h}時台：${c.cnt[h]}人（最低${rule(h).min}人）→ あと${rule(h).min - c.cnt[h]}人`)); if (hs.length > 6) L.push(`…ほか${hs.length - 6}時間`); }
+  if (dr && c.n < dr.min) L.push(`1日の出勤人数：${c.n}人（最低${dr.min}人）→ あと${dr.min - c.n}人`);
+  state.roles.forEach(ro => { const q = state.roleRules[ro.name]; if (!q || !q.min) return; const low = H.filter(h => (c.roleAt[h][ro.name] || 0) < q.min); if (low.length) L.push(`役割「${ro.name}」が足りません：${rng(low)}（最低${q.min}人）`); });
+  const A = state.settings.auto2, leads = state.roles.filter(r => r.lead).map(r => r.name);
+  if (A.leadMin > 0 && leads.length) { const low = H.filter(h => leads.reduce((n, nm) => n + (c.roleAt[h][nm] || 0), 0) < A.leadMin); if (low.length) L.push(`（参考）責任者がいない時間：${rng(low)}`); }
+  return L;
+}
+const tipOf = k => { const d = parseYmd(k); return `${d.getMonth() + 1}/${d.getDate()}（${DOW[d.getDay()]}）：人数が足りません\n` + shortDetail(k).join('\n'); };
+
 function dayStat(k) {   // lack = 人数が足りない（1日の人数ルール、または時間帯ごとの最低人数）
   const { n, cnt, roleAt, H } = dayCover(k), dr = dayRuleOf(k), hs = shortageOf(cnt, roleAt, H), dayShort = dr ? Math.max(0, dr.min - n) : 0;
   return { n, cnt, short: hs, dayShort, over: !!(dr && dr.max != null && n > dr.max), rule: dr, lack: hs > 0 || dayShort > 0 };
@@ -1219,7 +1236,7 @@ function renderShiftDesktop(keys, pk, el, ro) {
   const dayCount = Array(keys.length).fill(0), dayCost = Array(keys.length).fill(0), active = keys.some(hasShifts), stat = keys.map(k => dayStat(k));
   const lowAt = i => active && stat[i].lack, anyRule = stat.some(x => x.rule);
   let html = `<table class="gantt shiftgrid${compact ? ' compact' : ''}${ro ? ' ro' : ''}" style="width:100%;min-width:${nameW + keys.length * (compact ? 30 : 64)}px"><colgroup><col style="width:${nameW}px"></colgroup><thead><tr><th class="name">従業員</th>` +
-    keys.map((k, i) => { const d = parseYmd(k), low = lowAt(i); return `<th class="${low ? 'low ' : ''}${k === today ? 'today ' : ''}${d.getDay() === 0 ? 'sun' : d.getDay() === 6 ? 'sat' : ''}" title="${mdText(k)}（${DOW[d.getDay()]}）${low ? '：人数が足りません' : ''}">${compact && i && d.getDate() !== 1 ? d.getDate() : mdText(k)}<small>${compact ? DOW[d.getDay()] : '（' + DOW[d.getDay()] + '）'}</small>${low ? '<i class="warnmark">⚠</i>' : ''}</th>`; }).join('') + '</tr></thead><tbody>';
+    keys.map((k, i) => { const d = parseYmd(k), low = lowAt(i); return `<th class="${low ? 'low ' : ''}${k === today ? 'today ' : ''}${d.getDay() === 0 ? 'sun' : d.getDay() === 6 ? 'sat' : ''}" ${low ? ` data-tip="${esc(tipOf(k))}"` : ` title="${mdText(k)}（${DOW[d.getDay()]}）"`}>${compact && i && d.getDate() !== 1 ? d.getDate() : mdText(k)}<small>${compact ? DOW[d.getDay()] : '（' + DOW[d.getDay()] + '）'}</small>${low ? '<i class="warnmark">⚠</i>' : ''}</th>`; }).join('') + '</tr></thead><tbody>';
   shiftStaff(keys, pk).forEach(s => {
     const sb = subOf(s.id, pk); let tot = 0;
     const cells = keys.map((k, i) => {
@@ -1235,7 +1252,7 @@ function renderShiftDesktop(keys, pk, el, ro) {
   });
   html += '</tbody><tfoot>';
   if (anyRule) html += '<tr class="need"><th class="name">必要人数<small>人数ルール</small></th>' + stat.map(st => `<td>${st.rule ? st.rule.min + (compact ? (st.rule.max == null ? '+' : '-' + st.rule.max) : '〜' + (st.rule.max == null ? '' : st.rule.max)) : '—'}</td>`).join('') + '</tr>';
-  html += '<tr><th class="name">出勤人数</th>' + dayCount.map((n, i) => `<td class="${lowAt(i) ? 'low' : stat[i].over ? 'high' : ''}" title="${lowAt(i) ? '人数が足りません' : stat[i].over ? '最高人数を超えています' : ''}">${n}${compact ? '' : '人'}</td>`).join('') + '</tr>';
+  html += '<tr><th class="name">出勤人数</th>' + dayCount.map((n, i) => `<td class="${lowAt(i) ? 'low' : stat[i].over ? 'high' : ''}" ${lowAt(i) ? ` data-tip="${esc(tipOf(keys[i]))}"` : stat[i].over ? ' title="最高人数を超えています"' : ''}>${n}${compact ? '' : '人'}</td>`).join('') + '</tr>';
   if (anyWage) html += '<tr><th class="name">人件費</th>' + dayCost.map(c => `<td>${c ? (compact ? Math.round(c / 1000) + 'k' : money(c)) : '—'}</td>`).join('') + '</tr>';
   el.innerHTML = html + '</tfoot></table>';
 }
@@ -1248,14 +1265,15 @@ function renderShiftMobile(keys, pk) {
   let html = '<div class="mcal">' + DOW_MON.map(d => `<div class="dow">${d}</div>`).join('') + '<div class="mday blank"></div>'.repeat((aP.start.getDay() + 6) % 7);
   keys.forEach(k => {
     const d = parseYmd(k), st = dayStat(k), t = hasShifts(k), wd = d.getDay(), low = active && st.lack;
-    html += `<button type="button" class="mday${k === mDay ? ' sel' : ''}${k === today ? ' today' : ''}${low ? ' low' : ''}${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}" data-k="${k}"><b>${d.getDate()}</b><span>${t ? st.n + '人' : '—'}</span>${low ? '<i class="wm">⚠</i>' : ''}</button>`;
+    html += `<button type="button" class="mday${k === mDay ? ' sel' : ''}${k === today ? ' today' : ''}${low ? ' low' : ''}${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}" data-k="${k}"${low ? ` data-tip="${esc(tipOf(k))}"` : ''}><b>${d.getDate()}</b><span>${t ? st.n + '人' : '—'}</span>${low ? '<i class="wm">⚠</i>' : ''}</button>`;
   });
   html += '</div>';
   const d = parseYmd(mDay), st = dayStat(mDay), idx = keys.indexOf(mDay), t = hasShifts(mDay), low = active && st.lack;
   html += `<div class="mday-head"><button type="button" class="btn small" data-mnav="-1"${idx === 0 ? ' disabled' : ''} aria-label="前の日">‹</button><strong class="${low ? 'lack' : ''}">${d.getMonth() + 1}/${d.getDate()}（${DOW[d.getDay()]}）${low ? ' ⚠' : ''}</strong>` +
     `<button type="button" class="btn small" data-mnav="1"${idx === keys.length - 1 ? ' disabled' : ''} aria-label="次の日">›</button>` +
     `<span class="pill${low ? ' warn' : ' ok'}">${t ? st.n + '人' + (low ? '・人数が足りません' : '') : '未作成'}</span>` +
-    (st.rule ? `<span class="meta">必要 ${st.rule.min}${st.rule.max == null ? '人以上' : '〜' + st.rule.max + '人'}</span>` : '') + '</div><ul class="mlist">';
+    (st.rule ? `<span class="meta">必要 ${st.rule.min}${st.rule.max == null ? '人以上' : '〜' + st.rule.max + '人'}</span>` : '') + '</div>' +
+    (low ? `<div class="mshort">${shortDetail(mDay).map(x => esc(x)).join('<br>')}</div>` : '') + '<ul class="mlist">';
   shiftStaff(keys, pk).forEach(s => {
     const sh = dayShifts(mDay)[s.id], pref = adminPref(s.id, mDay, pk);
     let chip, cls = '', style = '';
@@ -1456,12 +1474,18 @@ function autoShifts(p, keep) {
    1) 従来の方式で初期案を作る  2) 「人数不足・責任者・休みの連続・連勤・勤務間の時間・週の日数・公平さ・個人の上限」をまとめて点数にして、
    従業員の入れ替え・日の入れ替えを繰り返して点数を下げる（希望休・在籍・出勤できる曜日と時間・18歳未満の深夜は、最初から候補に入れない）
    3) 足りない日の理由と、相談できる人（休みを指定されている人が先、希望休の人は最後の手段）をまとめる */
-let lastReport = null, a2Seed = 0;
+let lastReport = null, a2Seed = 0, busyStop = false;
+const yieldUI = () => new Promise(r => setTimeout(r, 0)), paintUI = () => new Promise(r => setTimeout(r, 40));
+const busyUI = {
+  show(msg, sub) { $('#busyMsg').textContent = msg; $('#busySub').textContent = sub || ''; $('#busyBar').style.width = '0%'; $('#busy').hidden = false; },
+  set(f) { $('#busyBar').style.width = Math.round(f * 100) + '%'; },
+  hide() { $('#busy').hidden = true; }
+};
 function prng32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const strSeed = str => { let h = 2166136261; for (const c of str) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
 const nowMs = () => (typeof performance !== 'undefined' ? performance : Date).now();
 
-function autoShiftsV2(p, keep, seedOffset) {
+async function autoShiftsV2(p, keep, seedOffset, onProgress) {
   const A = state.settings.auto2, R = state.autoRules, S = state.settings;
   const t0 = nowMs(), budget = Math.max(300, (A.secs || 2) * 1000);
   const init = autoShifts(p, keep);   // 初期案
@@ -1608,11 +1632,12 @@ function autoShiftsV2(p, keep, seedOffset) {
   };
   const randCell = () => { for (let t = 0; t < 10; t++) { const e = rint(N), d = rint(D), i = e * D + d; if (cands[i].length) return [e, d]; } return null; };
   const shortHours = d => { const o = [], b = d * Hn; for (let i = 0; i < Hn; i++) if (cov[b + i] < rmin[i] || (leadMin && lcov[b + i] < leadMin)) o.push(i); return o; };
-  let shortDaysList = [], iters = 0, best = total; const bestCur = Int32Array.from(cur);
+  let shortDaysList = [], iters = 0, best = total, lastY = nowMs(); const bestCur = Int32Array.from(cur);
   const tOpt = nowMs(), remain = Math.max(100, budget - (tOpt - t0));
   while (true) {
     if ((iters & 127) === 0) {
-      const el = nowMs() - tOpt; if (el >= remain) break;
+      const el = nowMs() - tOpt; if (el >= remain || busyStop) break;
+      if (nowMs() - lastY > 40) { if (onProgress) onProgress(Math.min(1, el / remain)); await yieldUI(); lastY = nowMs(); }   // 画面の「作成中」を動かすため、ときどき処理を譲る
       if ((iters & 255) === 0) { shortDaysList = []; for (let d = 0; d < D; d++) if (dayC[d] > 0 && (shortHours(d).length || (dayRule[d] && workers[d] < dayRule[d].min))) shortDaysList.push(d); }
       var T = 30 * Math.pow(0.5 / 30, el / remain);
     }
@@ -1709,7 +1734,8 @@ $('#wAuto').addEventListener('click', async () => {
   const msg = `${pLabel(aP)} のシフトを自動作成します。` + (any ? (keep ? '\n手で入れたシフトと休みは残し、ほかを作り直します。' : '\n今のシフト（休みの指定を含む）は、すべて作り直されます。') : '') +
     (unsub.length ? `\n\n希望が未提出の人：${unsub.join('、')}\n（希望休なし・出勤可能として扱います）` : '') + `\n\nルール：${ruleLabel()}`;
   if (!await ui.ask(msg, { ok: '自動作成する' })) return;
-  let res; try { res = autoShiftsV2(aP, keep, 0); } catch (err) { console.error(err); res = autoShifts(aP, keep); ui.toast('新しい自動作成でエラーが出たため、従来の方式で作りました', 'warn'); }
+  busyStop = false; busyUI.show('シフトを自動作成しています', `最大${state.settings.auto2.secs}秒かかります。人数が足りない日をなくすように、入れ替えながら良くしています。`); await paintUI();
+  let res; try { res = await autoShiftsV2(aP, keep, 0, f => busyUI.set(f)); } catch (err) { console.error(err); res = autoShifts(aP, keep); ui.toast('新しい自動作成でエラーが出たため、従来の方式で作りました', 'warn'); } finally { busyUI.hide(); }
   const { shortDays, relaxed } = res; save(); renderShift();
   const notes = [];
   if (res.report) notes.push(`（${(res.report.ms / 1000).toFixed(1)}秒）`);
@@ -1745,15 +1771,18 @@ function renderReport() {
 }
 $('#wReport').addEventListener('click', openReport);
 $('#arClose').addEventListener('click', () => { $('#arModal').hidden = true; });
+$('#busyStop').addEventListener('click', () => { busyStop = true; $('#busySub').textContent = 'ここまでの結果で仕上げています…'; });
 $('#arModal').addEventListener('click', async e => {
   if (e.target === $('#arModal')) { $('#arModal').hidden = true; return; }
   const v = e.target.dataset.ar; if (!v) return;
   const [id, k, a, b] = v.split('|'); $('#arModal').hidden = true;
   await activateCell(id, k); if (!shiftEl.hidden) { setT('sStart', pad2(+a) + ':00'); setT('sEnd', pad2(+b) + ':00'); setBreak(legalBreak(+b - +a)); updateShiftInfo(); }
 });
-$('#arRetry').addEventListener('click', () => {
+$('#arRetry').addEventListener('click', async () => {
   if (isPublished()) return lockedMsg();
-  const res = autoShiftsV2(aP, $('#wKeep').checked, ++a2Seed); save(); $('#arModal').hidden = true; renderShift(); openReport();
+  $('#arModal').hidden = true; busyStop = false; busyUI.show('別の案で作り直しています', `最大${state.settings.auto2.secs}秒かかります。`); await paintUI();
+  let res; try { res = await autoShiftsV2(aP, $('#wKeep').checked, ++a2Seed, f => busyUI.set(f)); } finally { busyUI.hide(); }
+  save(); renderShift(); openReport();
   ui.toast(`別の案で作り直しました（足りない日：${res.shortDays.length}日）`, res.shortDays.length ? 'warn' : '');
 });
 
@@ -2668,8 +2697,60 @@ $('#adForm').addEventListener('submit', e => {
 
 /* ========== 初期化 ========== */
 setT('eFrom', '09:00'); setT('eTo', '17:00');
-resetForm(); renderRoles(); renderConditions(); renderSettings(); renderLimits(); renderPeriodSettings(); renderTimeRange(); renderAutoRules(); renderSortBar(); renderShiftSortBar(); renderShiftRules(); renderSetCat(); renderMinWage(); renderNight(); renderAuto2(); renderPatterns(); renderStaffList(); renderGantt();
+resetForm(); renderRoles(); renderConditions(); renderSettings(); renderLimits(); renderPeriodSettings(); renderTimeRange(); renderAutoRules(); renderSortBar(); renderShiftSortBar(); renderShiftRules(); renderSetCat(); renderMinWage(); renderNight(); renderAuto2(); renderPatterns(); renderStaffList(); initSettingsUI(); renderGantt();
 if (state.settings.auto) fetchRate(false);   // ページを開くたびに最新レートを取得
+
+/* ---- ホバー（スマホはタップ）で出る説明 ---- */
+const tipEl = document.createElement('div'); tipEl.id = 'tip'; tipEl.hidden = true; document.body.append(tipEl);
+let tipFor = null;
+function showTip(el, x, y) {
+  const lines = el.dataset.tip.split('\n'); tipFor = el;
+  tipEl.innerHTML = `<b>${esc(lines[0])}</b>` + lines.slice(1).map(l => `<div${l.startsWith('（参考）') ? ' class="lead"' : ''}>${esc(l)}</div>`).join('');
+  tipEl.hidden = false;
+  const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  tipEl.style.left = Math.max(8, Math.min(x + 14, window.innerWidth - w - 8)) + 'px';
+  tipEl.style.top = Math.max(8, Math.min(y + 16, window.innerHeight - h - 8)) + 'px';
+}
+const hideTip = () => { tipEl.hidden = true; tipFor = null; };
+document.addEventListener('mouseover', e => { const t = e.target.closest && e.target.closest('[data-tip]'); if (t && layout !== 'mobile') showTip(t, e.clientX, e.clientY); });
+document.addEventListener('mousemove', e => { if (tipFor && !tipEl.hidden && layout !== 'mobile') showTip(tipFor, e.clientX, e.clientY); });
+document.addEventListener('mouseout', e => { const t = e.target.closest && e.target.closest('[data-tip]'); if (t && !t.contains(e.relatedTarget)) hideTip(); });
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('[data-tip]');
+  if (layout === 'mobile' && t) { /* 同じ内容をもう一度タップしたら閉じる（再描画で要素が変わっても動く） */ if (tipFor && !tipEl.hidden && tipFor.dataset.tip === t.dataset.tip) hideTip(); else { const r = t.getBoundingClientRect(); showTip(t, r.left, r.bottom); } }
+  else if (!t) hideTip();
+}, true);
+window.addEventListener('scroll', hideTip, true);
+
+/* ---- 設定タブ：カードの見た目と、説明文の開け閉め ---- */
+function initSettingsUI() {
+  document.querySelectorAll('.setcat .card').forEach((card, i) => {
+    if (!card.id) card.id = 'sc' + i;
+    const h2 = card.querySelector(':scope > h2'); if (!h2) return;
+    const head = document.createElement('div'); head.className = 'cardhead'; card.insertBefore(head, h2); head.append(h2);
+    const body = document.createElement('div'); body.className = 'cardbody';
+    while (head.nextSibling) body.append(head.nextSibling);
+    card.append(body);
+    if (card.querySelector('.help')) { const b = document.createElement('button'); b.type = 'button'; b.className = 'helpbtn'; b.dataset.hc = card.id; head.append(b); }
+  });
+  $('#srNote').classList.add('help');
+  applyHelp();
+}
+function applyHelp() {
+  const def = state.settings.helpDef !== 'closed', ov = state.settings.helpOpen;
+  document.querySelectorAll('.setcat .card').forEach(card => {
+    const open = card.id in ov ? ov[card.id] : def; card.classList.toggle('help-off', !open);
+    const b = card.querySelector('.helpbtn'); if (b) { b.textContent = open ? 'ⓘ 説明を隠す' : 'ⓘ 説明を見る'; b.setAttribute('aria-expanded', String(open)); }
+  });
+  document.querySelectorAll('.setcat .catdesc').forEach(el => el.classList.toggle('help-off', !def));
+  $('#helpDef').value = def ? 'open' : 'closed';
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('.helpbtn'); if (!b) return;
+  const card = $('#' + b.dataset.hc), open = !(b.dataset.hc in state.settings.helpOpen ? state.settings.helpOpen[b.dataset.hc] : state.settings.helpDef !== 'closed');
+  state.settings.helpOpen[b.dataset.hc] = open; save(); applyHelp();
+});
+$('#helpDef').addEventListener('change', () => { state.settings.helpDef = $('#helpDef').value; state.settings.helpOpen = {}; save(); applyHelp(); ui.toast(state.settings.helpDef === 'open' ? '説明を、いつも表示します' : '説明を、いつも畳みます（各カードの「説明を見る」で開けます）'); });
 
 /* ---- 起動：保持されたログインがあれば入り、なければログイン画面（アカウントがなければ、はじめの設定） ---- */
 (function boot() {
