@@ -1798,6 +1798,10 @@ function updateShiftInfo() {
     (hrs > state.settings.limitDay ? `　⚠ 1日の注意ライン（${state.settings.limitDay}時間）を超えています` : '');
   const need = legalBreak((tmin(b) - tmin(a)) / 60);
   if (brk < need) el.textContent += `　※法定の休憩（${need}分）が必要なため、保存すると自動で入ります`;
+  const cf = conflictOf({ start: a, end: b }, adminPref(editShift.id, editShift.date, pkOf(editShift.date)), s, editShift.date);   // 保存の前に、希望時間の外などを知らせる
+  if (cf === 'out') el.textContent += `\n⚠ ${s.name}さんの希望時間の外です（保存するとき、確認が出ます）`;
+  if (isMinor(s, editShift.date) && overlapMin({ start: a, end: b }, nightLegal) > 0) el.textContent += `\n⚠ 18歳未満のため、22時〜翌5時には原則入れません（保存するとき、確認が出ます）`;
+  if (!employedOn(s, editShift.date)) el.textContent += `\n⚠ この日は入社前、または退職後です（保存するとき、確認が出ます）`;
 }
 function setBreak(v) {
   const sel = $('#sBreak'), b = String(v || 0);
