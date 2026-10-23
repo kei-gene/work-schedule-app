@@ -3,12 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>シフト・作業スケジュール</title>
+<title>Shiftly</title>
+<link rel="icon" href="logo.png" id="favicon">
 <link rel="stylesheet" href="style.css">
 </head>
 <body data-auth="out">
 <header class="top">
-  <h1>シフト・作業スケジュール</h1>
+  <h1 class="brand"><img class="logo" src="logo.png" alt="" width="34" height="34"><span>Shiftly</span></h1>
   <nav class="tabs">
     <button class="tab active" data-tab="home"><span class="lg">ホーム</span><span class="sh">ホーム</span></button>
     <button class="tab" data-tab="shift"><span class="lg">シフト管理</span><span class="sh">シフト</span></button>
@@ -112,13 +113,13 @@
       <label class="inline">従業員の並び順<select id="wSort"></select></label>
       <button type="button" class="btn small" id="wDir"></button>
     </div>
-    <p class="hint">従業員が提出した希望が表に出ます（<b>休</b>＝希望休、<b>○</b>＝出勤可能、時間＝その時間だけ可能）。マスをクリックしてシフトを入れます。希望休の日に入れるときは確認が出ます。期間の長さは設定タブで変えられます。</p>
-    <div class="legend-shift">
-      <span><i class="lg pf-off"></i>希望休（本人の希望）</span>
-      <span><i class="lg rest"></i>休み（こちらで指定）</span>
-      <span><i class="lg pf-ok"></i>○ 未決定（出勤可能）</span>
-      <span><i class="lg pf-time"></i>時間指定（その時間だけ可能）</span>
-      <span><i class="lg work"></i>シフト（役割の色）</span>
+    <div class="legendbar">
+      <span class="lgitem" data-tip="希望休（本人の希望）&#10;本人が休みを希望した日です。&#10;自動作成では必ず守ります。シフトを入れるときは確認が出ます。"><i class="lg pf-off"></i>希望休</span>
+      <span class="lgitem" data-tip="休み（こちらで指定）&#10;管理者が休みにした日です。"><i class="lg rest"></i>休み</span>
+      <span class="lgitem" data-tip="○ 空き&#10;まだ決まっていない日です。出勤できます。"><i class="lg pf-ok"></i>○ 空き</span>
+      <span class="lgitem" data-tip="時間のみ&#10;本人が、その時間だけ出られると指定した日です。"><i class="lg pf-time"></i>時間のみ</span>
+      <span class="lgitem" data-tip="シフト&#10;色は、役割の色です。"><i class="lg work"></i>シフト</span>
+      <span class="legend-note">マスをクリックして入力</span>
     </div>
     <p id="wTotal" class="total"></p>
     <p id="wLack" class="lackline" hidden></p>
@@ -142,11 +143,12 @@
           <div class="toolbar">
             <div class="weeknav">
               <button type="button" class="btn small" id="ePrev">‹ 前の期間</button>
-              <button type="button" class="btn small" id="eToday">今の期間</button>
+              <button type="button" class="btn small" id="eToday">提出できる期間へ</button>
               <button type="button" class="btn small" id="eNext">次の期間 ›</button>
               <strong id="eLabel"></strong>
             </div>
           </div>
+          <div id="eWindow" class="dlbanner win" hidden></div>
           <div id="eDeadline" class="dlbanner"></div>
           <p class="hint">はじめは全日「出勤可能」です。下の項目を選んで日付をタップすると指定できます。同じ内容をもう一度タップすると指定が消えます。</p>
           <div class="brushbar">
@@ -296,7 +298,11 @@
       <div class="cols">
       <div class="card">
         <h2>シフト表の期間・提出締切</h2>
-        <label>期間の種類
+        <label>シフト表の期間の長さ
+          <select id="pUnit"><option value="w1">1週間</option><option value="w2">2週間</option><option value="m1">1か月</option><option value="custom">その他（週数・月の開始日を指定）</option></select>
+        </label>
+        <div id="pCustom" hidden>
+          <label>期間の種類
           <select id="pMode"><option value="month">月ごと（1か月）</option><option value="weeks">数週間ごと</option></select>
         </label>
         <div id="pMonthBox">
@@ -307,6 +313,7 @@
           <label>最初の期間の開始日<input type="date" id="pAnchor"></label>
         </div>
         <label>締切の初期値（期間の開始日の何日前。0なら設定しない）<input type="number" id="pDlDays" min="0" max="60" step="1"></label>
+        </div>
         <p id="pNote" class="meta"></p>
         <p class="meta help">管理者のシフト表と、従業員の希望提出は、この期間ごとに区切られます。</p>
       </div>
@@ -330,6 +337,14 @@
         <p class="meta help">早番・遅番など、よく使う時間帯を登録しておくと、自動作成がその型を優先して使います。型は、なくても使えます。人手が足りないときは、型に合わない時間も柔軟に使えます（上の設定）。</p>
         <div id="ptList" class="ptlist"></div>
         <div class="actions"><button type="button" class="btn" id="ptAdd">＋ 型を追加</button></div>
+      </div>
+      <div class="card" id="sbCard">
+        <h2>従業員が希望を出せる期間</h2>
+        <p class="meta help">従業員が希望シフトを出せる期間を決めます。初期設定は「次回分だけ」です。それ以外の期間は、従業員の画面では見るだけになります。期間の長さ（1週間・2週間・1か月）は、上の「シフト表の期間・提出締切」で決めます。</p>
+        <label>提出を受け付ける期間
+          <select id="sbMode"><option value="next">次回分だけ（初期設定）</option><option value="cur_next">今の期間と、次回分</option><option value="open">今の期間と、先のすべての期間</option></select>
+        </label>
+        <p id="sbNote" class="meta"></p>
       </div>
       <div class="card" id="srCard">
         <h2>日ごとの人数ルール（最低・最高人数）</h2>
@@ -621,7 +636,7 @@
 
 <div id="login" class="login">
   <div class="login-card">
-    <h1>シフト・作業スケジュール</h1>
+    <h1 class="brand"><img class="logo big" src="logo.png" alt="" width="44" height="44"><span>Shiftly</span></h1>
 
     <form id="lgForm" autocomplete="on">
       <h2>ログイン</h2>

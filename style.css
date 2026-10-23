@@ -545,3 +545,33 @@ body[data-layout="mobile"] .cardhead,body[data-layout="mobile"] .cardbody{paddin
 /* 確認の画面は、ほかの画面（シフトの編集など）より、いつも手前に出す */
 #modal.modal{z-index:70}
 #sInfo{white-space:pre-line}
+
+/* ---- ブランド（名前とロゴ）---- */
+.brand{display:flex;align-items:center;gap:10px;margin:0}
+.brand span{font-size:19px;font-weight:800;letter-spacing:.02em}
+.logo{width:34px;height:34px;border-radius:9px;object-fit:contain;background:rgba(255,255,255,.12);flex:none}
+.logo.big{width:44px;height:44px;background:transparent}
+.login-card .brand{margin-bottom:14px;color:#18323a}
+.login-card .brand span{font-size:22px}
+body[data-layout="mobile"] .brand span{font-size:16px}
+body[data-layout="mobile"] .logo{width:28px;height:28px}
+/* ---- シフトタブ：1行の凡例 ---- */
+.legendbar{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;margin:0 0 10px;padding:7px 12px;background:#fff;border:1px solid var(--line);border-radius:var(--radius);font-size:12.5px}
+.lgitem{display:inline-flex;align-items:center;gap:6px;color:var(--ink)}
+.legend-note{margin-left:auto;color:var(--sub);font-size:12px}
+.dlbanner.win{background:#fff7e6;border-color:#e4c77a}
+.dlbanner.win .btn{margin-left:8px}
+/* 期間の長さに合わせた、従業員のカレンダー */
+.cal[data-span="w1"] .cday{min-height:128px}
+.cal[data-span="w1"] .cday .dn{font-size:18px}
+.cal[data-span="w1"] .cday .st{font-size:13px}
+.cal[data-span="w2"] .cday{min-height:100px}
+.cal.locked .cday{cursor:default}
+.brushbar.off{opacity:.45;pointer-events:none}
+
+.lg{display:inline-block;width:15px;height:15px;border-radius:4px;border:1px solid rgba(0,0,0,.12);vertical-align:-3px}
+.lg.pf-off{background:#fde8e1;border-color:#e9b3a1}
+.lg.rest{background:#e4e9ed;border-color:#c5ced6}
+.lg.pf-ok{background:#f7fbfa;border-color:#cfe0de}
+.lg.pf-time{background:#fbf0d3;border-color:#e4c77a}
+.lg.work{background:linear-gradient(90deg,#0f6e6e 0 33%,#3b6fb6 33% 66%,#a23b5a 66%);border-color:transparent}

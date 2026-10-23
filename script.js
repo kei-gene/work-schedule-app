@@ -50,6 +50,7 @@ function load() {
   s.requests = s.requests || [];   // 出勤できる曜日・時間の変更申請 [{ id, staffId, at, avail, dpw, note, status, reply }]
   if (!s.settings.auto2) s.settings.auto2 = { restMax: 2, interval: 9, dpw: { min: 3, max: 5 }, leadMin: 1, secs: 2, flex: true };   // 自動作成の条件
   s.patterns = s.patterns || [];   // シフトの型 [{ id, name, start, end, days }]
+  if (!s.settings.submit) s.settings.submit = { mode: 'next' };   // 従業員が希望を出せる期間：'next' 次回分だけ ／ 'cur_next' 今の期間と次回分 ／ 'open' 今の期間以降すべて
   if (!s.settings.helpDef) s.settings.helpDef = 'open';   // 設定の説明文：'open' 表示する ／ 'closed' 畳む
   s.settings.helpOpen = s.settings.helpOpen || {};        // カードごとに開閉を変えたとき { カードID: true/false }   // 最低賃金：大阪府（令和8年10月1日〜）。設定で変えられる
   if (s.settings.sort && s.settings.sort.key === 'shortage') s.settings.sort = { key: 'manual', desc: false };
@@ -1023,7 +1024,7 @@ function periodOf(date) {
 const pKeys = p => { const out = []; for (let d = p.start; d < p.end; d = addDays(d, 1)) out.push(ymd(d)); return out; };
 const pLabel = p => { const e = addDays(p.end, -1); return `${p.start.getFullYear()}年 ${p.start.getMonth() + 1}/${p.start.getDate()}〜${e.getMonth() + 1}/${e.getDate()}（${pKeys(p).length}日間）`; };
 const pkOf = date => ymd(periodOf(parseYmd(date)).start);
-let aP = periodOf(new Date()), eP = periodOf(new Date());   // 管理者側／従業員側で表示中の期間
+let aP = periodOf(new Date()), eP = periodOf(periodOf(new Date()).end);   // 管理者は今の期間、従業員は次回分から表示   // 管理者側／従業員側で表示中の期間
 
 const dayShifts = k => state.shifts[k] || {};
 const hasShifts = k => Object.keys(dayShifts(k)).length > 0;            // 何か記録がある（休みを含む）
@@ -1888,16 +1889,26 @@ function renderBrush() {
   document.querySelectorAll('.brush').forEach(b => b.classList.toggle('active', b.dataset.brush === brush));
   $('#eTimeBox').hidden = brush !== 'time';
 }
+/* ---- 従業員が希望を出せる期間（管理者が設定。初期設定は「次回分だけ」）---- */
+const curP = () => periodOf(new Date()), nextP = () => periodOf(curP().end);
+function canSubmit(p) {
+  const m = state.settings.submit.mode, k = ymd(p.start), c = ymd(curP().start), n = ymd(nextP().start);
+  return m === 'open' ? k >= c : m === 'cur_next' ? (k === c || k === n) : k === n;
+}
+const periodUnitText = () => { const S = state.settings.period; return S.mode === 'month' ? '1か月' : `${S.weeks}週間`; };
+const spanKind = n => n <= 7 ? 'w1' : n <= 14 ? 'w2' : 'month';
 function renderEmpStatus() {
   const pk = ymd(eP.start), P = pf(empId), sub = P.submissions[pk], comment = P.comments[pk] || '', el = $('#eSubStatus');
   const dirty = sub && (JSON.stringify(sub.snap) !== JSON.stringify(snapshotFor(empId, pKeys(eP))) || (sub.comment || '') !== comment.trim());
-  el.textContent = !sub ? (isClosed(pk) ? '未提出（締切を過ぎました）' : '未提出') : dirty ? '提出後に変更があります。再提出してください' : `提出済み（${fmtAt(sub.at)}）`;
+  el.textContent = !sub ? (!canSubmit(eP) ? '提出を受け付けている期間ではありません' : isClosed(pk) ? '未提出（締切を過ぎました）' : '未提出') : dirty ? '提出後に変更があります。再提出してください' : `提出済み（${fmtAt(sub.at)}）`;
   el.className = 'substatus ' + (!sub ? '' : dirty ? 'warn' : 'ok');
   $('#eSubmit').textContent = sub ? '再提出する' : '提出する';
 }
 function renderEmpCal() {
   const p = eP, keys = pKeys(p), pk = ymd(p.start), pub = !!state.published[pk];
-  $('#eLabel').textContent = pLabel(p) + (pub ? '　確定済み' : '');
+  const allowed = canSubmit(p);
+  $('#eLabel').textContent = pLabel(p) + '・' + periodUnitText() + '単位' + (pub ? '　確定済み' : '');
+  $('#eCal').dataset.span = spanKind(keys.length);
   let html = DOW_MON.map(d => `<div class="dow">${d}</div>`).join('') + '<div class="cday blank"></div>'.repeat((p.start.getDay() + 6) % 7);
   keys.forEach((k, i) => {
     const d = parseYmd(k), e = effPref(empId, k), sh = pub ? dayShifts(k)[empId] : null, wd = d.getDay();
@@ -1907,10 +1918,13 @@ function renderEmpCal() {
       (sh ? `<span class="conf">確定 ${sh.off ? '休み' : hm(sh.start) + '–' + hm(sh.end)}</span>` : '') + '</button>';
   });
   $('#eCal').innerHTML = html;
-  const closed = isClosed(pk), lock = pub || closed, dl = deadlineOf(pk), left = dl ? Math.round((parseYmd(dl) - parseYmd(todayKey())) / 864e5) : 99;
-  $('#eDeadline').textContent = pub ? 'この期間のシフトは確定しました。' : closed ? deadlineText(pk) + '。希望の提出・変更はできません。変更したいときは管理者に連絡してください。' : dl ? deadlineText(pk) + 'までに提出してください。' : '';
+  const closed = isClosed(pk), lock = pub || closed || !allowed, dl = deadlineOf(pk), left = dl ? Math.round((parseYmd(dl) - parseYmd(todayKey())) / 864e5) : 99;
+  $('#eDeadline').textContent = !allowed ? '' : pub ? 'この期間のシフトは確定しました。' : closed ? deadlineText(pk) + '。希望の提出・変更はできません。変更したいときは管理者に連絡してください。' : dl ? deadlineText(pk) + 'までに提出してください。' : '';
   $('#eDeadline').className = 'dlbanner' + (closed ? ' closed' : left <= 3 ? ' near' : '');
-  $('#eSubmit').disabled = lock; $('#eComment').disabled = lock;
+  $('#eSubmit').disabled = lock; $('#eComment').disabled = lock; $('#eCal').classList.toggle('locked', lock); $('.brushbar').classList.toggle('off', lock);
+  const win = $('#eWindow'), n = nextP();
+  win.hidden = allowed;
+  if (!allowed) win.innerHTML = `この期間は、いま希望を出せません（見るだけです）。希望を出せるのは「${esc(pLabel(n))}」（次回分）です。<button type="button" class="btn small" id="eGoNext">次回分へ</button>`;
   if (document.activeElement !== $('#eComment')) $('#eComment').value = pf(empId).comments[pk] || '';
   renderEmpStatus();
 }
@@ -1919,11 +1933,13 @@ document.querySelectorAll('.etab').forEach(b => b.addEventListener('click', () =
 document.querySelectorAll('.brush').forEach(b => b.addEventListener('click', () => { brush = b.dataset.brush; renderBrush(); }));
 $('#ePrev').addEventListener('click', () => { eP = periodOf(addDays(eP.start, -1)); renderEmpCal(); });
 $('#eNext').addEventListener('click', () => { eP = periodOf(eP.end); renderEmpCal(); });
-$('#eToday').addEventListener('click', () => { eP = periodOf(new Date()); renderEmpCal(); });
+$('#eToday').addEventListener('click', () => { eP = nextP(); renderEmpCal(); });
+$('#eWindow').addEventListener('click', e => { if (e.target.id === 'eGoNext') { eP = nextP(); renderEmpCal(); } });
 
 /* 日付をタップ → 選んだ内容を指定（同じ内容をもう一度タップで解除） */
 $('#eCal').addEventListener('click', e => {
   const b = e.target.closest('.cday[data-k]'); if (!b) return;
+  if (!canSubmit(eP)) return ui.toast('この期間は、いま希望を出せません。希望を出せるのは次回分です', 'warn');
   if (state.published[ymd(eP.start)]) return ui.toast('この期間のシフトは確定済みです。変更したいときは管理者に連絡してください', 'warn');
   if (isClosed(ymd(eP.start))) return ui.toast(`${deadlineText(ymd(eP.start))}。希望の変更はできません。管理者に連絡してください`, 'warn');
   const k = b.dataset.k, P = pf(empId), cur = P.dates[k];
@@ -1943,6 +1959,7 @@ $('#eCal').addEventListener('click', e => {
 $('#eComment').addEventListener('input', () => { pf(empId).comments[ymd(eP.start)] = $('#eComment').value; save(); renderEmpStatus(); });
 $('#eSubmit').addEventListener('click', () => {
   const pk = ymd(eP.start);
+  if (!canSubmit(eP)) return ui.toast('この期間は、いま希望を出せません。希望を出せるのは次回分です', 'warn');
   if (state.published[pk]) return ui.toast('この期間のシフトは確定済みのため、希望は提出できません', 'warn');
   if (isClosed(pk)) return ui.toast('提出締切を過ぎているため、提出できません。管理者に連絡してください', 'warn');
   const P = pf(empId), comment = $('#eComment').value.trim();
@@ -2001,19 +2018,33 @@ function renderLimits() {
   state.settings.limitDay = d; state.settings.limitWeek = w; state.settings.maxStreak = n; save(); renderLimits(); ui.toast('注意ラインを更新しました');
   if (curTab === 'shift') renderShift();
 }));
+let pUnitCustom = false;
 function renderPeriodSettings() {
   const S = state.settings.period;
-  $('#pDlDays').value = state.settings.deadlineDays;
   $('#pMode').value = S.mode; $('#pStart').value = S.startDay; $('#pWeeks').value = String(S.weeks); $('#pAnchor').value = S.anchor;
   $('#pMonthBox').hidden = S.mode !== 'month'; $('#pWeeksBox').hidden = S.mode !== 'weeks';
-  $('#pNote').textContent = '今日を含む期間：' + pLabel(periodOf(new Date()));
+  const unit = pUnitCustom ? 'custom' : (S.mode === 'weeks' && S.weeks === 1) ? 'w1' : (S.mode === 'weeks' && S.weeks === 2) ? 'w2' : (S.mode === 'month' && S.startDay === 1) ? 'm1' : 'custom';
+  $('#pUnit').value = unit; $('#pCustom').hidden = unit !== 'custom';
+  $('#pNote').textContent = `今日を含む期間：${pLabel(curP())} ／ 次回分：${pLabel(nextP())}`;
+  renderSubmitWindow();
 }
+function renderSubmitWindow() {
+  const m = state.settings.submit.mode, c = curP(), n = nextP();
+  $('#sbMode').value = m;
+  $('#sbNote').textContent = '従業員がいま希望を出せる期間：' + (m === 'next' ? `次回分 ${pLabel(n)}` : m === 'cur_next' ? `今の期間 ${pLabel(c)} と、次回分 ${pLabel(n)}` : `今の期間 ${pLabel(c)} から先のすべて`);
+}
+$('#sbMode').addEventListener('change', () => { state.settings.submit.mode = $('#sbMode').value; save(); renderSubmitWindow(); ui.toast('希望を出せる期間を変更しました'); });
+$('#pUnit').addEventListener('change', () => {
+  const v = $('#pUnit').value, S = state.settings.period; pUnitCustom = v === 'custom';
+  if (v === 'w1') { S.mode = 'weeks'; S.weeks = 1; } else if (v === 'w2') { S.mode = 'weeks'; S.weeks = 2; } else if (v === 'm1') { S.mode = 'month'; S.startDay = 1; }
+  aP = periodOf(new Date()); eP = nextP(); save(); renderPeriodSettings(); ui.toast(v === 'custom' ? '週数や月の開始日を、下で指定してください' : `シフト表の期間を「${$('#pUnit').selectedOptions[0].textContent}」にしました`);
+});
 ['pMode', 'pStart', 'pWeeks', 'pAnchor'].forEach(id => $('#' + id).addEventListener('change', () => {
   const S = state.settings.period, sd = Math.round(+$('#pStart').value);
   if (!(sd >= 1 && sd <= 28)) { ui.toast('月の開始日は1〜28で入れてください', 'err'); renderPeriodSettings(); return; }
   if ($('#pMode').value === 'weeks' && !$('#pAnchor').value) { ui.toast('最初の期間の開始日を入れてください', 'err'); renderPeriodSettings(); return; }
   S.mode = $('#pMode').value; S.startDay = sd; S.weeks = +$('#pWeeks').value; if ($('#pAnchor').value) S.anchor = $('#pAnchor').value;
-  aP = periodOf(new Date()); eP = periodOf(new Date()); save(); renderPeriodSettings(); ui.toast('シフト表の期間を変更しました');
+  aP = periodOf(new Date()); eP = nextP(); save(); renderPeriodSettings(); ui.toast('シフト表の期間を変更しました');
 }));
 
 /* ========== 開発者モード（仮） ========== */
@@ -2755,6 +2786,15 @@ document.addEventListener('click', e => {
   state.settings.helpOpen[b.dataset.hc] = open; save(); applyHelp();
 });
 $('#helpDef').addEventListener('change', () => { state.settings.helpDef = $('#helpDef').value; state.settings.helpOpen = {}; save(); applyHelp(); ui.toast(state.settings.helpDef === 'open' ? '説明を、いつも表示します' : '説明を、いつも畳みます（各カードの「説明を見る」で開けます）'); });
+
+/* ---- ロゴ：同じフォルダに logo.png（または logo.svg / logo.jpg / logo.webp）を置くと、名前の横に表示されます。ないときは仮のマーク ---- */
+const LOGO_FALLBACK = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0f6e6e"/><rect x="14" y="17" width="36" height="7" rx="3.5" fill="#fff"/><rect x="14" y="29" width="36" height="7" rx="3.5" fill="#fff" opacity=".85"/><rect x="14" y="41" width="22" height="7" rx="3.5" fill="#fff" opacity=".7"/></svg>');
+(function setupLogo() {
+  const imgs = [...document.querySelectorAll('img.logo')], fav = $('#favicon'), names = ['logo.png', 'logo.svg', 'logo.jpg', 'logo.jpeg', 'logo.webp'];
+  imgs.forEach(i => { i.src = LOGO_FALLBACK; }); fav.href = LOGO_FALLBACK;
+  const tryNext = k => { if (k >= names.length) return; const t = new Image(); t.onload = () => { imgs.forEach(i => { i.src = names[k]; }); fav.href = names[k]; }; t.onerror = () => tryNext(k + 1); t.src = names[k]; };
+  tryNext(0);
+})();
 
 /* ---- 起動：保持されたログインがあれば入り、なければログイン画面（アカウントがなければ、はじめの設定） ---- */
 (function boot() {
