@@ -1,0 +1,83 @@
+/* ---- 作成中の表示 ---- */
+.busy{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:rgba(20,30,36,.5);backdrop-filter:blur(1px)}
+.busy[hidden]{display:none}
+.busy-card{background:#fff;border-radius:12px;padding:26px 30px 22px;width:min(420px,90vw);text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+.spin{width:38px;height:38px;margin:0 auto 14px;border:4px solid #d6e6e4;border-top-color:var(--accent);border-radius:50%;animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.busy-msg{margin:0 0 12px;font-size:15px;font-weight:700}
+.bar{height:8px;background:#e4ecec;border-radius:4px;overflow:hidden;margin-bottom:10px}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .15s linear}
+.busy-card .meta{margin:0 0 14px;color:var(--sub);font-size:12px;line-height:1.7}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:2.4s}}
+/* ---- ホバーで詳しく見る ---- */
+#tip{position:fixed;z-index:90;max-width:320px;background:#18323a;color:#fff;border-radius:8px;padding:9px 12px;font-size:12px;line-height:1.7;box-shadow:0 6px 20px rgba(0,0,0,.3);pointer-events:none}
+#tip[hidden]{display:none}
+#tip b{display:block;font-size:13px;margin-bottom:2px}
+#tip .lead{color:#b8cfd3}
+[data-tip]{cursor:help}
+.tipchip{display:inline-block;margin:2px 6px 2px 0;padding:1px 9px;border-radius:12px;background:#fff;border:1px solid #e9b3a1;color:#b3261e;font-size:12px;font-weight:700;cursor:help}
+/* ---- 設定タブ：見やすいレイアウト ---- */
+.setcats{position:sticky;top:0;z-index:6;background:var(--bg);padding:8px 0 10px;margin-bottom:6px;align-items:center}
+.helpsel{margin:0 0 0 auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);font-weight:400}
+.helpsel select{width:auto;margin:0;padding:5px 8px}
+.setcat .cols{grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:18px}
+.setcat .card{padding:0;overflow:hidden;box-shadow:0 1px 2px rgba(20,40,50,.06)}
+.cardhead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 18px;border-bottom:1px solid var(--line);background:linear-gradient(#fff,#f6f9f9)}
+.setcat .card .cardhead h2{margin:0;font-size:15px}
+.cardbody{padding:16px 18px 18px}
+.helpbtn{border:1px solid var(--line);background:#fff;border-radius:14px;padding:3px 11px;font:inherit;font-size:12px;color:var(--sub);cursor:pointer;white-space:nowrap}
+.helpbtn:hover{border-color:var(--c);color:var(--c)}
+.setcat .help{background:#f4f8f8;border-left:3px solid var(--c);border-radius:4px;padding:8px 12px;font-size:12px;line-height:1.75;color:#506070;margin:0 0 14px}
+.help-off .help,.catdesc.help-off{display:none}
+.setcat .catdesc.help{border:1px solid var(--line);border-left:5px solid var(--c);background:#fff;color:var(--ink);font-size:13px}
+.setcat label{font-size:12px;font-weight:700;color:#4b5a66;margin-bottom:14px}
+.setcat label.check{font-weight:400;color:var(--ink);font-size:13px}
+.setcat .row2{gap:0 18px}
+.setcat .meta:not(.help){font-size:12px;color:var(--sub);line-height:1.7}
+.setcat .actions{margin-top:6px}
+.setcat .tscroll table.rules th{font-size:11px;background:#f6f9f9}
+body[data-layout="mobile"] .setcat .cols{grid-template-columns:1fr}
+body[data-layout="mobile"] .setcats{flex-wrap:nowrap;overflow-x:auto}
+body[data-layout="mobile"] .helpsel{flex:none;margin-left:12px}
+body[data-layout="mobile"] .cardhead,body[data-layout="mobile"] .cardbody{padding-left:14px;padding-right:14px}
+
+.mshort{margin:8px 0 10px;padding:8px 12px;background:#fde8e1;border-left:4px solid #e5675b;border-radius:4px;color:#b3261e;font-size:12px;line-height:1.7}
+
+/* 確認の画面は、ほかの画面（シフトの編集など）より、いつも手前に出す */
+#modal.modal{z-index:70}
+#sInfo{white-space:pre-line}
+
+/* ---- ブランド（名前とロゴ）---- */
+.brand{display:flex;align-items:center;gap:10px;margin:0}
+.brand span{font-size:19px;font-weight:800;letter-spacing:.02em}
+.logo{width:34px;height:34px;border-radius:9px;object-fit:contain;background:rgba(255,255,255,.12);flex:none}
+.logo.big{width:44px;height:44px;background:transparent}
+.login-card .brand{margin-bottom:14px;color:#18323a}
+.login-card .brand span{font-size:22px}
+body[data-layout="mobile"] .brand span{font-size:16px}
+body[data-layout="mobile"] .logo{width:28px;height:28px}
+/* ---- シフトタブ：1行の凡例 ---- */
+.legendbar{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;margin:0 0 10px;padding:7px 12px;background:#fff;border:1px solid var(--line);border-radius:var(--radius);font-size:12.5px}
+.lgitem{display:inline-flex;align-items:center;gap:6px;color:var(--ink)}
+.legend-note{margin-left:auto;color:var(--sub);font-size:12px}
+.dlbanner.win{background:#fff7e6;border-color:#e4c77a}
+.dlbanner.win .btn{margin-left:8px}
+/* 期間の長さに合わせた、従業員のカレンダー */
+.cal[data-span="w1"] .cday{min-height:128px}
+.cal[data-span="w1"] .cday .dn{font-size:18px}
+.cal[data-span="w1"] .cday .st{font-size:13px}
+.cal[data-span="w2"] .cday{min-height:100px}
+.cal.locked .cday{cursor:default}
+.brushbar.off{opacity:.45;pointer-events:none}
+
+.sw{display:inline-block;width:15px;height:15px;border-radius:4px;border:1px solid rgba(0,0,0,.12);vertical-align:-3px}
+.sw.pf-off{background:#fde8e1;border-color:#e9b3a1}
+.sw.rest{background:#e4e9ed;border-color:#c5ced6}
+.sw.pf-ok{background:#f7fbfa;border-color:#cfe0de}
+.sw.pf-time{background:#fbf0d3;border-color:#e4c77a}
+.sw.work{background:linear-gradient(90deg,#0f6e6e 0 33%,#3b6fb6 33% 66%,#a23b5a 66%);border-color:transparent}
+/* ---- 設定タブ：保存バー ---- */
+.setbar{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:44;display:flex;align-items:center;gap:10px;padding:10px 14px 10px 18px;background:#18323a;color:#fff;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.35);font-size:13px;font-weight:700;white-space:nowrap}
+.setbar .btn{padding:7px 14px}
+body[data-layout="mobile"] .setbar{left:10px;right:10px;transform:none;bottom:calc(68px + env(safe-area-inset-bottom,0px));white-space:normal;flex-wrap:wrap;justify-content:flex-end}
+body[data-layout="mobile"] .setbar span{flex:1 1 100%}

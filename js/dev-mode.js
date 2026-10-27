@@ -1,0 +1,284 @@
+'use strict';
+
+/* ========== 開発者モード（仮） ========== */
+const RND_SUR = ['佐藤', '鈴木', '高橋', '田中', '伊藤', '渡辺', '山本', '中村', '小林', '加藤', '吉田', '山田', '佐々木', '松本', '井上', '木村', '林', '清水', '山崎', '森'];
+const RND_GIV = ['太郎', '花子', '健太', '美咲', '翔太', '愛', '大輝', '結衣', '陽菜', '蓮', '悠斗', '優奈', '拓海', '彩', '颯太', '莉子', '直樹', '真央', '亮', '菜々子'];
+const RND_EN = ['Sarah Lee', 'Mike Chen', 'Emma Brown', 'Daniel Kim', 'Olivia Park', 'Noah Smith', 'Mia Tanaka', 'Liam Wong'];
+const RND_COMMENTS = ['試験期間のため、1日お休みをいただけると助かります。', '早い時間帯なら多めに入れます。', '特にありません。よろしくお願いします。', '家族の予定があるので、週末は控えめでお願いします。', '', ''];
+const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const shuffle = arr => { for (let i = arr.length - 1; i > 0; i--) { const j = rnd(0, i); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+const hh = n => pad2(n) + ':00';
+
+/* 業態ごとの階級（役割）と、従業員の傾向。店長（boss）は基本的に1人だけ */
+const INDUSTRIES = {
+  restaurant: { label: '飲食店', open: 10, close: 24, demand: [[10, 11, 2], [11, 14, 5], [14, 17, 3], [17, 21, 6], [21, 23, 3], [23, 24, 2]], wk: 1.3, roles: [
+    { name: '店長', color: '#a23b5a', boss: true, max: 1, w: 0, rating: [4, 5], wage: [1800, 2400], len: [8, 10], win: 'any' },
+    { name: '副店長', color: '#6b5b95', max: 2, w: 1, rating: [4, 5], wage: [1500, 1900], len: [8, 9], win: 'any' },
+    { name: 'ホールリーダー', color: '#3b6fb6', max: 2, w: 1, rating: [3, 5], wage: [1250, 1500], len: [6, 8], win: 'any' },
+    { name: 'キッチンリーダー', color: '#b45f06', max: 2, w: 1, rating: [3, 5], wage: [1300, 1600], len: [6, 8], win: 'any' },
+    { name: 'ホール', color: '#0f6e6e', w: 6, rating: [2, 4], wage: [1050, 1250], len: [4, 7], win: 'any' },
+    { name: 'キッチン', color: '#8a6d1d', w: 5, rating: [2, 4], wage: [1100, 1300], len: [4, 8], win: 'any' },
+    { name: '洗い場', color: '#5b7a2f', w: 2, rating: [1, 3], wage: [1000, 1150], len: [3, 5], win: 'late' }] },
+  convenience: { label: 'コンビニ', open: 6, close: 28, demand: [[6, 9, 3], [9, 17, 2], [17, 20, 3], [20, 28, 2]], wk: 1.1, roles: [
+    { name: '店長', color: '#a23b5a', boss: true, max: 1, w: 0, rating: [4, 5], wage: [1800, 2300], len: [8, 10], win: 'early' },
+    { name: '副店長', color: '#6b5b95', max: 2, w: 1, rating: [4, 5], wage: [1500, 1800], len: [8, 9], win: 'any' },
+    { name: '日勤リーダー', color: '#3b6fb6', max: 2, w: 1, rating: [3, 5], wage: [1200, 1400], len: [6, 8], win: 'early' },
+    { name: '夜勤リーダー', color: '#2f7d9a', max: 2, w: 1, rating: [3, 5], wage: [1400, 1700], len: [7, 8], win: 'night' },
+    { name: '日勤スタッフ', color: '#0f6e6e', w: 6, rating: [2, 4], wage: [1050, 1200], len: [4, 8], win: 'any' },
+    { name: '夜勤スタッフ', color: '#8a6d1d', w: 4, rating: [2, 4], wage: [1250, 1450], len: [6, 8], win: 'night' },
+    { name: '研修中', color: '#5f6b76', w: 1, rating: [1, 2], wage: [1000, 1050], len: [3, 5], win: 'any' }] },
+  supermarket: { label: 'スーパー', open: 8, close: 23, demand: [[8, 10, 3], [10, 16, 4], [16, 20, 6], [20, 23, 3]], wk: 1.3, roles: [
+    { name: '店長', color: '#a23b5a', boss: true, max: 1, w: 0, rating: [4, 5], wage: [1800, 2400], len: [8, 10], win: 'any' },
+    { name: '副店長', color: '#6b5b95', max: 2, w: 1, rating: [4, 5], wage: [1500, 1900], len: [8, 9], win: 'any' },
+    { name: '部門チーフ', color: '#3b6fb6', max: 3, w: 1, rating: [3, 5], wage: [1300, 1600], len: [7, 9], win: 'early' },
+    { name: 'レジチーフ', color: '#2f7d9a', max: 1, w: 1, rating: [3, 5], wage: [1200, 1400], len: [6, 8], win: 'any' },
+    { name: 'レジ', color: '#0f6e6e', w: 6, rating: [2, 4], wage: [1050, 1200], len: [4, 7], win: 'any' },
+    { name: '青果', color: '#5b7a2f', w: 3, rating: [2, 4], wage: [1050, 1250], len: [4, 7], win: 'early' },
+    { name: '精肉・鮮魚', color: '#b45f06', w: 3, rating: [2, 4], wage: [1100, 1300], len: [4, 8], win: 'early' },
+    { name: '惣菜', color: '#8a6d1d', w: 3, rating: [2, 4], wage: [1050, 1250], len: [4, 7], win: 'any' },
+    { name: '品出し', color: '#5f6b76', w: 4, rating: [1, 3], wage: [1000, 1150], len: [3, 6], win: 'early' },
+    { name: '新人研修', color: '#9a8c98', w: 1, rating: [1, 2], wage: [1000, 1050], len: [3, 5], win: 'any' }] },
+  apparel: { label: 'アパレル', open: 10, close: 22, demand: [[10, 12, 2], [12, 18, 4], [18, 22, 3]], wk: 1.5, roles: [
+    { name: '店長', color: '#a23b5a', boss: true, max: 1, w: 0, rating: [4, 5], wage: [1800, 2400], len: [8, 10], win: 'any' },
+    { name: '副店長', color: '#6b5b95', max: 1, w: 1, rating: [4, 5], wage: [1500, 1900], len: [8, 9], win: 'any' },
+    { name: '販売リーダー', color: '#3b6fb6', max: 2, w: 1, rating: [3, 5], wage: [1250, 1500], len: [6, 8], win: 'any' },
+    { name: '販売スタッフ', color: '#0f6e6e', w: 7, rating: [2, 4], wage: [1100, 1300], len: [4, 8], win: 'any' },
+    { name: 'レジ', color: '#2f7d9a', w: 3, rating: [2, 4], wage: [1050, 1200], len: [4, 7], win: 'any' },
+    { name: 'ストック', color: '#5f6b76', w: 2, rating: [1, 3], wage: [1000, 1150], len: [3, 6], win: 'early' },
+    { name: 'VMD', color: '#8a6d1d', max: 1, w: 1, rating: [3, 5], wage: [1300, 1600], len: [6, 8], win: 'early' },
+    { name: '新人研修', color: '#9a8c98', w: 1, rating: [1, 2], wage: [1000, 1050], len: [3, 5], win: 'any' }] }
+};
+const indNote = k => { const i = INDUSTRIES[k]; return i ? `${i.label}：営業 ${i.open}:00〜${i.close}:00 ／ 階級（上が上位）：${i.roles.map(r => r.name).join(' ＞ ')} ／ 店長は1人だけ登録します。` : '今ある役割（階級）の中から、ランダムに選びます。'; };
+
+/* 業態に合わせて、役割（階級）・営業時間を入れ替える */
+function applyIndustry(ind) {
+  state.roles = ind.roles.map(r => ({ name: r.name, color: r.color, lead: !!(r.boss || r.name === '副店長') }));   // 店長・副店長は責任者
+  const PAT = { restaurant: [['早番', 10, 17], ['遅番', 17, 24], ['通し', 11, 21]], convenience: [['早番', 6, 14], ['日勤', 9, 17], ['遅番', 14, 22], ['夜勤', 22, 28]], supermarket: [['早番', 8, 15], ['中番', 11, 18], ['遅番', 16, 23]], apparel: [['早番', 10, 17], ['遅番', 15, 22]] };
+  const key = Object.keys(INDUSTRIES).find(k => INDUSTRIES[k] === ind);
+  state.patterns = (PAT[key] || []).map(([name, a, b], i) => ({ id: 'p' + Date.now() + i, name, start: hh(a), end: hh(b), days: [1, 2, 3, 4, 5, 6, 0] }));
+  const names = new Set(state.roles.map(r => r.name));
+  state.staff.forEach(s => { if (!names.has(s.role)) s.role = ''; });
+  state.roleRules = {}; const boss = ind.roles.find(r => r.boss); if (boss) state.roleRules[boss.name] = { min: 0, max: 1 };   // 店長は同時に1人まで
+  state.open = ind.open; state.close = ind.close; state.rules = {}; viewOrder = null; mDay = null;
+}
+/* 登録人数に合わせた、時間帯ごと・日ごとの人数ルールの目安 */
+function applyIndustryRules(ctx) {
+  const N = state.staff.length, r = f => Math.max(1, Math.round(N * f));
+  if (ctx) {   // 必要人数（時間帯ごと）から、時間帯ごと・日ごとの人数ルールを作る
+    const dem = h => demandAt(ctx.ind, h, ctx.scale), H = hoursList(), sum = H.reduce((a, h) => a + dem(h), 0), wd = Math.ceil(sum / 6.5), we = Math.ceil(sum * ctx.ind.wk / 6.5);
+    state.rules = {}; H.forEach(h => { const m = dem(h); state.rules[h] = { min: m, max: Math.ceil(m * 1.5) + 1 }; });
+    state.shiftRules = [{ day: 'weekday', month: 0, date: '', min: wd, max: Math.ceil(wd * 1.4) }, { day: 'weekend', month: 0, date: '', min: we, max: Math.ceil(we * 1.4) }];
+    return;
+  }
+  hoursList().forEach(h => { state.rules[h] = { min: 1, max: Math.max(3, Math.ceil(N * 0.4)) }; });
+  state.shiftRules = [
+    { day: 'weekday', month: 0, date: '', min: r(0.25), max: Math.max(r(0.25) + 1, r(0.5)) },
+    { day: 'weekend', month: 0, date: '', min: r(0.35), max: Math.max(r(0.35) + 1, r(0.7)) }
+  ];
+}
+
+/* 時間帯ごとの必要人数（業態の目安 × 店の規模） */
+const demandAt = (ind, h, scale) => { const seg = ind.demand.find(([a, b]) => h >= a && h < b); return Math.max(1, Math.round((seg ? seg[2] : 1) * scale)); };
+const WD = [1, 2, 3, 4, 5], WE = [6, 0];
+const frac = (days, type) => { const base = type === 'we' ? WE : WD; return days.filter(d => base.includes(d)).length / base.length; };   // その種類の曜日のうち、出勤できる割合
+/* 出勤できる曜日のパターン（現実の働き方に近づける）。type：足りない曜日の種類（'wd' 平日 / 'we' 休日） */
+function pickDays(type) {
+  const r = Math.random(), all = [1, 2, 3, 4, 5, 6, 0];
+  if (type === 'we') return r < 0.45 ? WE.slice() : r < 0.75 ? all : [...WE, ...shuffle(WD.slice()).slice(0, rnd(2, 3))];
+  if (type === 'wd') return r < 0.45 ? WD.slice() : r < 0.75 ? all : shuffle(WD.slice()).slice(0, rnd(3, 4));
+  return r < 0.5 ? all : r < 0.65 ? WD.slice() : r < 0.8 ? [...WE, ...shuffle(WD.slice()).slice(0, rnd(1, 3))] : shuffle(all).slice(0, rnd(3, 5));
+}
+/* 1人分：出勤できる曜日と時間（複数の時間帯・予備つき）、時給（多くの人は最低賃金のまま）を作る */
+function buildStaff(sp, st, en, isBoss, used, idx, days) {
+  const open = state.open, close = state.close, min = state.settings.minWage;
+  const pats = (state.patterns || []).filter(x => x.start && x.end);   // シフトの型があるときは、多くの人が型に近い時間帯で出られる設定にする（現実の募集に近づける）
+  if (pats.length && !isBoss && Math.random() < 0.7) { let best = null, bo = 0; pats.forEach(x => { const a = toH(x.start), b = toH(x.end, true), ov = Math.min(b, en) - Math.max(a, st); if (ov > bo) { bo = ov; best = x; } }); if (best) { st = toH(best.start); en = toH(best.end, true); } }
+  const minor = !isBoss && sp.max == null && sp.rating[1] <= 4 && Math.random() < 0.07;   // 高校生など（18歳未満）：22時〜翌5時には出られない
+  if (minor) { en = Math.min(en, 22); st = Math.max(Math.min(st, en - 4), Math.max(open, 5)); if (en - st < 3) { st = Math.max(open, 5); en = Math.min(22, st + 4); } }
+  let name, tries = 0;
+  do { name = pick(RND_SUR) + pick(RND_GIV); tries++; } while (used.has(name) && tries < 40);
+  if (used.has(name)) name += rnd(2, 9);
+  used.add(name);
+  const main = DAY_ORDER.filter(d => days.includes(d)), avail = [{ days: main, start: hh(st), end: hh(en), kind: 'main' }];
+  if (Math.random() < 0.35 && en < Math.min(close, minor ? 22 : close)) avail.push({ days: main.slice(), start: hh(en), end: hh(Math.min(minor ? 22 : close, en + rnd(1, 3))), kind: 'sub' });
+  const rest = DAY_ORDER.filter(d => !days.includes(d));
+  if (!isBoss && rest.length && Math.random() < 0.3) {   // ほかの曜日は、別の時間帯で出られる人（「＋ 追加」の例）
+    const l2 = Math.min(close - open, rnd(4, 8)), s2 = minor ? rnd(Math.max(open, 5), 18) : rnd(open, close - l2);
+    avail.push({ days: rest, start: hh(s2), end: hh(minor ? Math.min(22, s2 + l2) : s2 + l2), kind: 'main' });
+  }
+  const w = Math.round(rnd(sp.wage[0], sp.wage[1]) / 10) * 10, leader = sp.max != null;
+  const type = leader ? '社員' : pick(['アルバイト', 'アルバイト', 'パート']);
+  const dayMs = 864e5, now = Date.now(), birthDate = d => { const x = new Date(d); return ymd(x); };
+  const birth = minor ? birthDate(now - (16 + rnd(0, 1)) * 365.25 * dayMs - rnd(0, 300) * dayMs) : (Math.random() < 0.8 ? birthDate(now - rnd(19, 55) * 365.25 * dayMs - rnd(0, 300) * dayMs) : '');
+  return {
+    id: 's' + Date.now() + '_r' + idx, name, role: sp.name, rating: rnd(sp.rating[0], sp.rating[1]), wage: w > min + 20 ? w : 0, cur: 'JPY',
+    type, birth, avail, dpw: leader ? { min: 5, max: 5 } : minor ? { min: 1, max: 3 } : type === 'パート' ? { min: 3, max: 4 } : (Math.random() < 0.5 ? { min: 2, max: 4 } : null),
+    weeklyMax: minor ? 28 : (type === 'パート' && Math.random() < 0.4) ? pick([20, 24, 28]) : 0,        // 働き方を抑えたい人（例）
+    incomeCap: (!leader && !minor && Math.random() < 0.15) ? pick([88000, 108000]) : 0,
+    join: Math.random() < 0.04 ? ymd(new Date(now + rnd(3, 14) * dayMs)) : '', leave: Math.random() < 0.03 ? ymd(new Date(now + rnd(10, 25) * dayMs)) : ''
+  };
+}
+const addSupply = (sup, s, open, close) => (s.avail || []).filter(x => x.kind !== 'sub').forEach(x => {
+  for (let h = toH(x.start); h < toH(x.end, true); h++) ['wd', 'we'].forEach(t => { if (sup[t][h] !== undefined) sup[t][h] += frac(slotDays(x), t); });
+});
+/* 企業が「各時間帯の必要人数が足りるように採用する」イメージ：平日・休日それぞれで足りない時間帯を見つけて、そこに出勤できる人を足していく。
+   従業員は、出勤できる日の約64%（週4.5日ぶん）しか出勤しない想定で、必要人数の約1.56倍（× 余裕）の人が出勤できるまで採用する */
+function randomStaffDemand(indKey, scale, margin) {
+  const ind = INDUSTRIES[indKey], open = state.open, close = state.close, span = close - open;
+  const used = new Set(state.staff.map(s => s.name)), counts = {}, out = [], sup = { wd: {}, we: {} };
+  for (let h = open; h < close; h++) { sup.wd[h] = 0; sup.we[h] = 0; }
+  state.staff.forEach(s => { counts[s.role] = (counts[s.role] || 0) + 1; addSupply(sup, s); });
+  const need = (t, h) => Math.ceil(demandAt(ind, h, scale) * (t === 'we' ? ind.wk : 1) * 1.56 * margin);
+  const specs = ind.roles, boss = specs.find(sp => sp.boss), room = x => x.w > 0 && (x.max == null || (counts[x.name] || 0) < x.max);
+  for (let i = 0; i < 300; i++) {
+    let worst = null;
+    ['wd', 'we'].forEach(t => { for (let h = open; h < close; h++) { const gap = need(t, h) - sup[t][h]; if (gap > 0 && (!worst || gap > worst.gap)) worst = { t, h, gap }; } });
+    if (!worst) break;
+    const { t, h: hc } = worst;
+    let sp, isBoss = false;
+    if (boss && !(counts[boss.name] || 0)) { sp = boss; isBoss = true; }
+    else {
+      const ok = specs.filter(x => room(x) && (x.win !== 'night' || hc >= close - 9) && !(x.win === 'early' && hc > open + span * 0.65));
+      const pool = ok.length ? ok : specs.filter(room);
+      let r = Math.random() * pool.reduce((a, x) => a + x.w, 0); sp = pool[pool.length - 1];
+      for (const x of pool) { r -= x.w; if (r <= 0) { sp = x; break; } }
+    }
+    counts[sp.name] = (counts[sp.name] || 0) + 1;
+    const len = Math.min(span, rnd(sp.len[0], sp.len[1])), st = Math.min(close - len, Math.max(open, hc - rnd(0, len - 1)));
+    const s = buildStaff(sp, st, st + len, isBoss, used, out.length, pickDays(t)); out.push(s); addSupply(sup, s);
+  }
+  return out;
+}
+/* いまの従業員で、必要人数（時間帯ごとの最低人数）を満たせそうか（平日・休日） */
+function supplyReport() {
+  if (!state.staff.length) return '';
+  const H = hoursList(), res = {};
+  ['wd', 'we'].forEach(t => {
+    const sup = {}; H.forEach(h => { sup[h] = 0; }); state.staff.forEach(s => addSupply({ wd: t === 'wd' ? sup : {}, we: t === 'we' ? sup : {} }, s));
+    let worst = Infinity, worstH = H[0], sum = 0; const weak = [];
+    H.forEach(h => { const ratio = sup[h] * 0.64 / Math.max(1, rule(h).min); sum += ratio; if (ratio < worst) { worst = ratio; worstH = h; } if (ratio < 1) weak.push(h); });
+    res[t] = { worst, worstH, avg: sum / H.length, weak };
+  });
+  const f = (t, n) => `${n}：最低${res[t].worst.toFixed(1)}倍（${res[t].worstH}時台）・平均${res[t].avg.toFixed(1)}倍`;
+  const weak = [...res.wd.weak.map(h => '平日' + h + '時台'), ...res.we.weak.map(h => '休日' + h + '時台')];
+  return `人員の充足度（出勤できる人数 × 出勤率64% ÷ 必要人数）　${f('wd', '平日')}／${f('we', '休日')}。` + (weak.length ? `⚠ ${weak.slice(0, 8).join('、')}${weak.length > 8 ? '…' : ''}は、必要人数を満たせない見込みです。` : '全時間帯で、必要人数を満たせる見込みです。');
+}
+
+/* 人数を決めて作る（業態の「必要人数から自動」をオフにしたとき） */
+function randomStaff(n, indKey) {
+  const ind = INDUSTRIES[indKey], open = state.open, close = state.close, span = Math.max(1, close - open), out = [];
+  const GENERIC = { name: '', w: 1, rating: [1, 5], wage: [1000, 1500], len: [4, 8], win: 'any' };
+  const specs = ind ? ind.roles : state.roles.map(r => ({ ...GENERIC, name: r.name }));
+  const used = new Set(state.staff.map(s => s.name)), counts = {};
+  state.staff.forEach(s => { counts[s.role] = (counts[s.role] || 0) + 1; });
+  const pickRole = () => {
+    const ok = specs.filter(sp => sp.w > 0 && (sp.max == null || (counts[sp.name] || 0) < sp.max));
+    if (!ok.length) return GENERIC;
+    let r = Math.random() * ok.reduce((a, sp) => a + sp.w, 0);
+    for (const sp of ok) { r -= sp.w; if (r <= 0) return sp; }
+    return ok[ok.length - 1];
+  };
+  const boss = specs.find(sp => sp.boss);
+  for (let i = 0; i < n; i++) {
+    const isBoss = !!boss && i === 0 && !(counts[boss.name] || 0);   // 店長は、いなければ最初の1人だけ
+    const sp = isBoss ? boss : pickRole();
+    counts[sp.name] = (counts[sp.name] || 0) + 1;
+    const len = Math.min(span, rnd(sp.len[0], sp.len[1])), slack = Math.max(0, span - len);
+    const kind = sp.win === 'any' ? ['early', 'any', 'late'][i % 3] : sp.win;   // 朝・昼・夜がばらけるようにする
+    const st = open + (kind === 'early' ? rnd(0, Math.floor(slack / 3)) : kind === 'late' ? slack - rnd(0, Math.floor(slack / 3)) : kind === 'night' ? slack : rnd(0, slack));
+    out.push(buildStaff(sp, st, Math.min(close, st + len), isBoss, used, i, pickDays()));
+  }
+  // 平日・休日のどの時間にも、出勤できる人が1人はいるようにする
+  const all = [...state.staff, ...out];
+  [['wd', WD], ['we', WE]].forEach(([, base]) => {
+    for (let h = open; h < close; h++) {
+      if (all.some(x => (x.avail || []).some(sl => sl.kind !== 'sub' && h >= toH(sl.start) && h < toH(sl.end, true) && slotDays(sl).some(d => base.includes(d))))) continue;
+      const c = out.filter(x => !boss || x.role !== boss.name)[0] || out[0]; if (!c) break;
+      c.avail.push({ days: base.slice(), start: hh(h), end: hh(Math.min(close, h + 4)), kind: 'main' });
+    }
+  });
+  return out;
+}
+
+function randomPrefs(p) {
+  const keys = pKeys(p), pk = ymd(p.start), open = state.open, close = state.close;
+  const window_ = () => { const a = rnd(open, Math.max(open, close - 4)); return { start: hh(a), end: hh(Math.min(close, a + rnd(3, 6))) }; };
+  const isWe = k => [0, 6].includes(parseYmd(k).getDay());
+  const cap = Math.max(1, Math.floor(state.staff.length * 0.3)), offCount = {};   // 同じ日に希望休が集まりすぎないようにする
+  state.staff.forEach(s => {
+    const P = pf(s.id);
+    P.dates = {}; P.rules = [];
+    if (Math.random() < 0.25) P.rules.push(Math.random() < 0.7 ? { target: pick(RULE_TARGETS.slice(2))[0], status: 'off' } : { target: 'holiday', status: 'time', ...window_() });
+    const offN = pick([0, 0, 1, 1, 1, 2, 2, 3, 3, 4, 5]), timeN = rnd(0, 2);
+    const order = Math.random() < 0.5 ? [...shuffle(keys.filter(isWe)), ...shuffle(keys.filter(k => !isWe(k)))] : shuffle(keys.slice());   // 休みは週末ぎみ
+    let off = 0;
+    for (const k of order) { if (off >= offN) break; if ((offCount[k] || 0) >= cap) continue; P.dates[k] = { status: 'off' }; offCount[k] = (offCount[k] || 0) + 1; off++; }
+    order.filter(k => !P.dates[k]).slice(0, timeN).forEach(k => { P.dates[k] = { status: 'time', ...window_() }; });
+    delete P.submissions[pk];
+    if (Math.random() < 0.9) {
+      const c = pick(RND_COMMENTS);
+      P.comments[pk] = c;
+      P.submissions[pk] = { at: new Date(Date.now() - rnd(1, 72) * 3600e3).toISOString(), comment: c, snap: snapshotFor(s.id, keys) };
+    } else P.comments[pk] = '';   // 未提出のまま
+  });
+}
+
+function renderDev() {
+  renderAdmins();
+  $('#dLayout').value = state.settings.layout || 'auto';
+  const kb = Math.round((localStorage.getItem(KEY) || '').length / 102.4) / 10;
+  $('#dInfo').textContent = `従業員 ${state.staff.length}人 ／ シフトのある日 ${Object.keys(state.shifts).length}日 ／ 保存データ 約${kb}KB`;
+  $('#dReport').textContent = supplyReport();
+  syncDevCount();
+}
+function syncDevCount() { $('#dCount').disabled = $('#dAuto').checked && $('#dInd').value !== 'generic' && $('#dApply').checked; }
+['dAuto', 'dInd', 'dApply'].forEach(id => $('#' + id).addEventListener('change', syncDevCount));
+$('#dInd').addEventListener('change', () => { $('#dIndNote').textContent = indNote($('#dInd').value); });
+$('#dIndNote').textContent = indNote('generic');
+$('#dRandomStaff').addEventListener('click', async () => {
+  const indKey = $('#dInd').value, ind = INDUSTRIES[indKey], apply = !!ind && $('#dApply').checked, auto = apply && $('#dAuto').checked;
+  let n = Math.round(+$('#dCount').value);
+  if (!auto && !(n >= 1 && n <= 50)) return ui.toast('人数は1〜50で入れてください', 'err');
+  const replace = $('#dMode').value === 'replace';
+  if (replace && state.staff.length && !await ui.ask(`今の従業員${state.staff.length}人と、そのシフト・希望がすべて消えます。入れ替えますか？`, { ok: '入れ替える', danger: true })) return;
+  if (replace) { state.staff = []; state.work = {}; state.workMode = {}; state.shifts = {}; state.prefs = {}; state.published = {}; state.auth.users = state.auth.users.filter(u => u.role !== 'employee'); }
+  if (apply) applyIndustry(ind);
+  const scale = +$('#dScale').value, margin = +$('#dMargin').value;
+  const made = auto ? randomStaffDemand(indKey, scale, margin) : randomStaff(n, indKey); n = made.length; state.staff.push(...made);
+  if (apply) { applyIndustryRules(auto ? { ind, scale } : null); renderConditions(); renderTimeRange(); renderRoleRules(); renderShiftRules(); }
+  const rows = $('#dAcct').checked ? made.map(issueFor) : [];
+  save(); renderRoles(); renderGantt(); renderDev();
+  ui.toast(`ランダムな従業員を${n}人登録しました${apply ? `（${ind.label}モード${auto ? '・必要人数から自動' : ''}）` : ''}`);
+  if (rows.length) showCreds('従業員アカウントを発行しました', '初期パスワードは、この画面でしか確認できません。控えてから閉じてください（最初のログインで本人が変更します）。', credText(rows));
+});
+$('#dRandomPrefs').addEventListener('click', async () => {
+  if (!state.staff.length) return ui.toast('先に従業員を登録してください', 'warn');
+  const p = periodOf(new Date());
+  if (!await ui.ask(`${pLabel(p)} の希望を、全員分ランダムに作り直します。今ある希望と提出は上書きされます。`, { ok: '作る' })) return;
+  randomPrefs(p); save(); renderDev();
+  ui.toast('希望シフトをランダムに作りました。管理者画面のシフト管理で確認できます');
+});
+$('#dLayout').addEventListener('change', () => { state.settings.layout = $('#dLayout').value; save(); applyLayout(); });
+$('#dReset').addEventListener('click', async () => {
+  if (!await ui.ask('このアプリが保存しているデータ（アカウントを含む）をすべて消して、最初の状態に戻します。元には戻せません。', { ok: 'すべて消す', danger: true })) return;
+  localStorage.removeItem(KEY); endSession(); location.reload();
+});
+
+$('#pDlDays').addEventListener('change', () => {
+  const n = Math.round(+$('#pDlDays').value);
+  if (!(n >= 0 && n <= 60)) { ui.toast('0〜60の数を入れてください', 'err'); renderPeriodSettings(); return; }
+  state.settings.deadlineDays = n; save(); ui.toast(n ? `締切の初期値を、期間の開始日の${n}日前にしました` : '締切の初期値をなしにしました');
+  if (curTab === 'shift') renderShift();
+});
+
+/* ---- 管理者／従業員／開発者の表示切替（仮） ---- */
+function setMode(m) {
+  if (!allowedModes().includes(m)) return;
+  if (m !== 'admin') abandonDraft();
+  document.body.dataset.mode = m;
+  document.querySelectorAll('.mbtn').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+  if (m === 'employee' || m === 'dev') { document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === m)); if (m === 'employee') renderEmployee(); else renderDev(); }
+  else switchTab(curTab);
+}
+document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', async () => { if (b.dataset.mode !== document.body.dataset.mode && !await confirmLeaveSettings()) return; setMode(b.dataset.mode); }));

@@ -1,0 +1,81 @@
+/* ---- 追加分 ---- */
+.total{margin:4px 0 0;font-weight:700}
+.total:empty{display:none}
+.btn.danger{background:#b3261e;border-color:#b3261e;color:#fff;font-weight:700}
+.time{display:flex;align-items:center;gap:6px;margin-top:4px}
+.time select{margin:0;flex:1;min-width:0}
+.time span{color:var(--sub)}
+.wage{display:flex;gap:6px;margin-top:4px}
+.wage input,.wage select{margin:0}
+.wage select{width:84px;flex:none}
+.bulk{background:#f5f7f9;border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin:4px 0 14px}
+.bulk-row{display:flex;align-items:flex-end;gap:8px;margin-top:8px;flex-wrap:wrap}
+.bulk-row select{width:auto;margin:0}
+.bulk-row label{margin:0}
+.bulk-row input{width:70px}
+.role-form{display:flex;gap:8px;margin-bottom:10px}
+.role-form input[type=text]{margin:0}
+.role-form input[type=color]{width:46px;padding:2px;margin:0;height:auto;cursor:pointer}
+.staff-list .badge{margin:0}
+.toasts{position:fixed;right:24px;top:68px;display:flex;flex-direction:column;gap:8px;z-index:85}
+.toast{background:#18323a;color:#fff;padding:11px 18px;border-radius:var(--radius);border-left:4px solid #5fb3a8;
+  box-shadow:0 4px 14px rgba(0,0,0,.2);max-width:420px;animation:toastIn .3s cubic-bezier(.2,.8,.3,1);transition:opacity .25s,transform .25s}
+.toast.err{border-left-color:#e5675b}
+.toast.warn{border-left-color:#e0a63a}
+.toast.out{opacity:0;transform:translateX(120%)}
+@keyframes toastIn{from{opacity:0;transform:translateX(120%)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.toast{animation:none}}
+.modal{position:fixed;inset:0;background:rgba(20,30,36,.45);display:flex;align-items:center;justify-content:center;z-index:50}
+.modal[hidden]{display:none}
+.dialog{background:#fff;border-radius:8px;padding:24px 26px 18px;width:min(420px,90vw);box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.dialog p{margin:0;line-height:1.7;font-size:15px;white-space:pre-line}
+.dialog .actions{justify-content:flex-end;margin-top:20px}
+
+/* ---- 時刻入力（直接入力＋選択） ---- */
+.time{position:relative;display:flex;align-items:stretch;gap:6px;margin-top:4px}
+.time input{margin:0;text-align:center;font-variant-numeric:tabular-nums}
+.time input.bad{border-color:var(--warn);background:#fff4f0}
+.tbtn{width:38px;flex:none;border:1px solid var(--line);background:#fff;border-radius:var(--radius);cursor:pointer;color:var(--sub);font:inherit}
+.tbtn:hover{border-color:var(--accent);color:var(--accent)}
+.tpop{position:absolute;top:100%;left:0;margin-top:4px;z-index:20;width:176px;background:#fff;border:1px solid var(--line);
+  border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.18);padding:8px;display:flex;flex-wrap:wrap;gap:6px}
+.tpop[hidden]{display:none}
+.row2 .field:nth-child(2) .tpop{left:auto;right:0}
+.tcol{display:flex;flex-direction:column;flex:1;max-height:216px;overflow-y:auto}
+.tcol button{border:0;background:transparent;padding:6px 0;font:inherit;color:var(--ink);cursor:pointer;border-radius:4px}
+.tcol button:hover{background:#e6f2f1}
+.tcol button.sel{background:var(--accent);color:#fff}
+.tclear{flex-basis:100%}
+.check{display:flex;align-items:center;gap:8px;color:var(--ink);font-size:13px}
+.check input{width:auto;margin:0}
+.wage .btn{white-space:nowrap}
+
+/* ---- 並び替え ---- */
+.sortbar{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.sortbar label.inline{display:flex;align-items:center;gap:8px;margin:0;color:var(--ink);font-size:13px}
+.sortbar select{width:auto;margin:0;padding:5px 8px}
+.grip{color:var(--sub);cursor:grab;user-select:none;font-size:18px}
+.staff-list li.drag{opacity:.4}
+.staff-list li.over{box-shadow:0 -2px 0 var(--accent)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn:disabled:hover{border-color:var(--line)}
+
+.rr-title{font-size:14px;margin:22px 0 4px}
+.rules .badge{margin:0}
+
+.gantt thead th{height:40px}
+.card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.card-head h2{margin:0}
+.stepper-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.stepper-row span{width:72px;color:var(--sub);font-size:12px}
+.stepper-row b{width:64px;text-align:center;font-size:16px}
+.dialog{max-height:90vh;overflow:auto}
+.dialog.wide{width:min(720px,94vw)}
+.dialog h2{margin:0 0 8px;font-size:17px}
+.dialog code{display:block;background:#f5f7f9;border:1px solid var(--line);border-radius:4px;padding:6px 10px;margin:8px 0;font-size:12px;overflow-x:auto}
+.dialog .meta{margin:6px 0;color:var(--sub);font-size:12px;line-height:1.6}
+.dialog textarea{width:100%;font:13px/1.6 ui-monospace,"BIZ UDGothic",monospace;border:1px solid var(--line);border-radius:var(--radius);padding:10px;resize:vertical}
+.bulk-tools{display:flex;align-items:center;gap:12px;margin:10px 0;flex-wrap:wrap}
+.bulk-tools input[type=file]{width:auto;margin:0;padding:4px;font-size:12px}
+.bulk-tools label{margin:0}
+.msg{white-space:pre-line}
