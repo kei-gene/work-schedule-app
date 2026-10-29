@@ -99,6 +99,9 @@ const rule = h => state.rules[h] || { min: 1, max: 3 };
 const fmt = h => h + ':00';
 const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+/* 兼務：s.role＝主な役割、s.skills＝兼務できる持ち場（教わって一人でできる）。シフトの st＝その日に入る持ち場（主な役割のときは省略） */
+const skillsOf = s => { const a = []; if (s.role) a.push(s.role); (s.skills || []).forEach(n => { if (n && !a.includes(n) && state.roles.some(r => r.name === n)) a.push(n); }); return a; };
+const stationOf = (s, sh) => (sh && sh.st && skillsOf(s).includes(sh.st)) ? sh.st : s.role;
 const roleColor = n => (state.roles.find(r => r.name === n) || {}).color || '#5f6b76';
 
 function toH(t, isEnd) {

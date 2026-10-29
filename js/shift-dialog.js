@@ -29,6 +29,8 @@ function openShift(id, date) {
   $('#sHint').textContent = `出勤できる曜日・時間：${availText(s)}` + (cur && cur.off ? '　【今は「休み」に指定中】' : '');
   $('#sPref').textContent = '本人の希望：' + prefText(pref);
   $('#sFillSub').hidden = !slotFor(s, date, 'sub');
+  const sk = skillsOf(s); $('#sStWrap').hidden = sk.length < 2;   // 兼務できる人だけ、その日に入る持ち場を選べる
+  $('#sSt').innerHTML = sk.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join(''); $('#sSt').value = work ? stationOf(s, cur) : s.role;
   setT('sStart', work ? cur.start : ''); setT('sEnd', work ? cur.end : ''); setBreak(work ? cur.brk : 0);
   $('#sDelete').hidden = !!(cur && cur.off); $('#sUnset').hidden = !cur; $('#sSave').textContent = work ? '変更を保存' : '保存';
   updateShiftInfo(); shiftEl.hidden = false; $('#sStart input').focus();
@@ -77,7 +79,8 @@ $('#sSave').addEventListener('click', async () => {
   const need = legalBreak((tmin(b) - tmin(a)) / 60), bumped = brk < need;   // 法定の最低休憩に足りなければ、自動で入れる
   if (bumped) brk = need;
   const { id, date } = editShift, pref = adminPref(id, date, pkOf(date));
-  (state.shifts[date] = state.shifts[date] || {})[id] = { start: a, end: b, brk };
+  const stSel = $('#sStWrap').hidden ? '' : $('#sSt').value;
+  (state.shifts[date] = state.shifts[date] || {})[id] = { start: a, end: b, brk, ...(stSel && stSel !== stf.role ? { st: stSel } : {}) };
   save(); closeShift(); renderShift();
   const cf = conflictOf({ start: a, end: b }, pref, stf, date), note = cf === 'req' ? '（希望休の日です）' : cf === 'out' ? '（希望の時間外です）' : '';
   ui.toast('シフトを保存しました' + note + (bumped ? `（法定の休憩${need}分を入れました）` : ''), note ? 'warn' : '');

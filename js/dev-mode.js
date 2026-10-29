@@ -49,6 +49,14 @@ const INDUSTRIES = {
     { name: 'VMD', color: '#8a6d1d', max: 1, w: 1, rating: [3, 5], wage: [1300, 1600], len: [6, 8], win: 'early' },
     { name: '新人研修', color: '#9a8c98', w: 1, rating: [1, 2], wage: [1000, 1050], len: [3, 5], win: 'any' }] }
 };
+/* 兼務できる持ち場のグループ（バイト・パートの一部が、同じグループの持ち場を兼務できる）と、業態ごとの「役割ごとの最低人数」 */
+const SKILL_GROUPS = { restaurant: ['ホール', 'キッチン', '洗い場'], convenience: ['日勤スタッフ', '夜勤スタッフ'], supermarket: ['レジ', '青果', '精肉・鮮魚', '惣菜', '品出し'], apparel: ['販売スタッフ', 'レジ', 'ストック'] };
+const ROLE_MIN = { restaurant: { 'ホール': 1, 'キッチン': 1 }, supermarket: { 'レジ': 1 }, apparel: { '販売スタッフ': 1 } };
+function addSkills(s, indKey) {   // 評価が高い人ほど、教わって一人でできる持ち場が多い
+  const g = SKILL_GROUPS[indKey]; if (!g || !g.includes(s.role) || s.type === '社員') return s;
+  if (Math.random() < 0.2 + 0.1 * s.rating) s.skills = shuffle(g.filter(n => n !== s.role)).slice(0, Math.random() < 0.7 ? 1 : 2);
+  return s;
+}
 const indNote = k => { const i = INDUSTRIES[k]; return i ? `${i.label}：営業 ${i.open}:00〜${i.close}:00 ／ 階級（上が上位）：${i.roles.map(r => r.name).join(' ＞ ')} ／ 店長は1人だけ登録します。` : '今ある役割（階級）の中から、ランダムに選びます。'; };
 
 /* 業態に合わせて、役割（階級）・営業時間を入れ替える */
@@ -58,8 +66,9 @@ function applyIndustry(ind) {
   const key = Object.keys(INDUSTRIES).find(k => INDUSTRIES[k] === ind);
   state.patterns = (PAT[key] || []).map(([name, a, b], i) => ({ id: 'p' + Date.now() + i, name, start: hh(a), end: hh(b), days: [1, 2, 3, 4, 5, 6, 0] }));
   const names = new Set(state.roles.map(r => r.name));
-  state.staff.forEach(s => { if (!names.has(s.role)) s.role = ''; });
-  state.roleRules = {}; const boss = ind.roles.find(r => r.boss); if (boss) state.roleRules[boss.name] = { min: 0, max: 1 };   // 店長は同時に1人まで
+  state.staff.forEach(s => { if (!names.has(s.role)) s.role = ''; if (s.skills) s.skills = s.skills.filter(n => names.has(n)); });
+  state.roleRules = {}; const boss = ind.roles.find(r => r.boss); if (boss) state.roleRules[boss.name] = { min: 0, max: 1 };
+  Object.entries(ROLE_MIN[key] || {}).forEach(([n, m]) => { state.roleRules[n] = { min: m, max: null }; });   // 例：ホール・キッチンは、いつも最低1人   // 店長は同時に1人まで
   state.open = ind.open; state.close = ind.close; state.rules = {}; viewOrder = null; mDay = null;
 }
 /* 登録人数に合わせた、時間帯ごと・日ごとの人数ルールの目安 */
@@ -89,38 +98,74 @@ function pickDays(type) {
   if (type === 'wd') return r < 0.45 ? WD.slice() : r < 0.75 ? all : shuffle(WD.slice()).slice(0, rnd(3, 4));
   return r < 0.5 ? all : r < 0.65 ? WD.slice() : r < 0.8 ? [...WE, ...shuffle(WD.slice()).slice(0, rnd(1, 3))] : shuffle(all).slice(0, rnd(3, 5));
 }
+/* 人の事情（年齢・雇用区分）：社員は店長・副店長級、リーダーはパート・アルバイトのベテラン。アルバイトは学生・フリーター、パートは主婦（夫）・シニアが中心。
+   学生は、平日は授業のあとの時間（高校生は17時以降）と土日、主婦は昼間の平日、シニアは夕方までが中心になる */
+const wpick = list => { let r = Math.random() * list.reduce((a, x) => a + x[1], 0); for (const [v, w] of list) { r -= w; if (r <= 0) return v; } return list[list.length - 1][0]; };
+function pickPersona(sp, hc, t) {   // hc：人が足りない時間、t：'wd'（平日）か'we'（休日）。人数だけ決めるときは、どちらも指定しない
+  if (sp.boss) return { persona: 'mgr', type: '社員', age: rnd(32, 55) };
+  if (sp.name === '副店長') return { persona: 'mgr', type: '社員', age: rnd(27, 48) };
+  const mk = p => p === 'wife' ? { persona: p, type: 'パート', age: wpick([[rnd(30, 49), 65], [rnd(50, 59), 25], [rnd(24, 29), 10]]) }
+    : p === 'senior' ? { persona: p, type: 'パート', age: rnd(60, 72) }
+    : p === 'free' ? { persona: p, type: 'アルバイト', age: Math.random() < 0.75 ? rnd(23, 34) : rnd(35, 50) }
+    : p === 'hs' ? { persona: p, type: 'アルバイト', age: rnd(16, 18) }
+    : { persona: 'uni', type: 'アルバイト', age: rnd(18, 22) };
+  if (/研修/.test(sp.name)) return mk(wpick([['uni', 6], ['hs', 2], ['free', 2]]));   // 入ったばかりの人
+  if (sp.max != null) { const p = wpick([['wife', 5], ['free', 4], ['uni', 1]]); return p === 'wife' ? { persona: p, type: 'パート', age: rnd(30, 55) } : p === 'free' ? { persona: p, type: 'アルバイト', age: rnd(25, 45) } : { persona: 'uni', type: 'アルバイト', age: rnd(21, 23) }; }   // リーダー：長く働いているパート・アルバイト
+  const day = t === 'wd' && hc < 17, night = sp.win === 'night' || hc >= 21;
+  return mk(night ? wpick([['uni', 40], ['free', 40], ['wife', 10]]) : day ? wpick([['wife', 55], ['senior', 15], ['free', 20], ['uni', 10]]) : t === 'wd' ? wpick([['uni', 40], ['hs', 12], ['free', 20], ['wife', 28]]) : wpick([['uni', 38], ['hs', 10], ['free', 22], ['wife', 22], ['senior', 8]]));
+}
 /* 1人分：出勤できる曜日と時間（複数の時間帯・予備つき）、時給（多くの人は最低賃金のまま）を作る */
-function buildStaff(sp, st, en, isBoss, used, idx, days) {
+function buildStaff(sp, st, en, isBoss, used, idx, days, per) {
+  per = per || pickPersona(sp, st, undefined);
   const open = state.open, close = state.close, min = state.settings.minWage;
   const pats = (state.patterns || []).filter(x => x.start && x.end);   // シフトの型があるときは、多くの人が型に近い時間帯で出られる設定にする（現実の募集に近づける）
   if (pats.length && !isBoss && Math.random() < 0.7) { let best = null, bo = 0; pats.forEach(x => { const a = toH(x.start), b = toH(x.end, true), ov = Math.min(b, en) - Math.max(a, st); if (ov > bo) { bo = ov; best = x; } }); if (best) { st = toH(best.start); en = toH(best.end, true); } }
-  const minor = !isBoss && sp.max == null && sp.rating[1] <= 4 && Math.random() < 0.07;   // 高校生など（18歳未満）：22時〜翌5時には出られない
+  const minor = per.age < 18, stu = per.persona === 'uni' || per.persona === 'hs', sein = per.type === '社員', leader = sp.max != null;   // 18歳未満：22時〜翌5時には出られない
   if (minor) { en = Math.min(en, 22); st = Math.max(Math.min(st, en - 4), Math.max(open, 5)); if (en - st < 3) { st = Math.max(open, 5); en = Math.min(22, st + 4); } }
+  if (sein) {   // 社員：ほぼ毎日出勤できる（実際に働くのは週5日ほど）。店長は営業時間をほぼ通しで、副店長は通し・早番ぎみ・遅番ぎみのどれか（早番・遅番で店に社員がいる時間をつなぐ）
+    const top = Math.min(close, 24), len = top - open;
+    if (len >= 4) {
+      if (sp.boss) { st = open; en = top; }
+      else { const k = Math.random(); if (k < 0.4) { st = open; en = top; } else if (k < 0.7) { st = open; en = open + Math.ceil(len * 0.75); } else { st = open + Math.floor(len * 0.25); en = top; } }
+    }
+    days = Math.random() < 0.9 ? DAY_ORDER.slice() : shuffle(DAY_ORDER.slice()).slice(0, 6);
+  }
+  if (per.persona === 'senior' && en > 19) en = Math.max(st + 3, 19);   // シニアは夕方まで
+  if (per.persona === 'wife' && en > 22) en = Math.max(st + 3, 22);
   let name, tries = 0;
   do { name = pick(RND_SUR) + pick(RND_GIV); tries++; } while (used.has(name) && tries < 40);
   if (used.has(name)) name += rnd(2, 9);
   used.add(name);
-  const main = DAY_ORDER.filter(d => days.includes(d)), avail = [{ days: main, start: hh(st), end: hh(en), kind: 'main' }];
+  const main = DAY_ORDER.filter(d => days.includes(d)), wdM = main.filter(d => d >= 1 && d <= 5), weM = main.filter(d => d === 0 || d === 6);
+  let avail;
+  if (stu && wdM.length) {   // 学生：平日は授業のあと、土日は通常の時間
+    const ws = Math.max(st, per.persona === 'hs' ? 17 : 16); avail = [];
+    if (weM.length) avail.push({ days: weM, start: hh(st), end: hh(en), kind: 'main' });
+    if (en - ws >= 3) avail.push({ days: wdM, start: hh(ws), end: hh(en), kind: 'main' });
+    if (!avail.length) avail.push({ days: [6, 0], start: hh(st), end: hh(en), kind: 'main' });
+  } else avail = [{ days: main, start: hh(st), end: hh(en), kind: 'main' }];
   if (Math.random() < 0.35 && en < Math.min(close, minor ? 22 : close)) avail.push({ days: main.slice(), start: hh(en), end: hh(Math.min(minor ? 22 : close, en + rnd(1, 3))), kind: 'sub' });
-  const rest = DAY_ORDER.filter(d => !days.includes(d));
-  if (!isBoss && rest.length && Math.random() < 0.3) {   // ほかの曜日は、別の時間帯で出られる人（「＋ 追加」の例）
+  const rest = DAY_ORDER.filter(d => !days.includes(d)), restUse = stu ? rest.filter(d => d === 0 || d === 6) : rest;
+  if (!isBoss && restUse.length && Math.random() < 0.3) {   // ほかの曜日は、別の時間帯で出られる人（「＋ 追加」の例）
     const l2 = Math.min(close - open, rnd(4, 8)), s2 = minor ? rnd(Math.max(open, 5), 18) : rnd(open, close - l2);
-    avail.push({ days: rest, start: hh(s2), end: hh(minor ? Math.min(22, s2 + l2) : s2 + l2), kind: 'main' });
+    avail.push({ days: restUse, start: hh(s2), end: hh(minor ? Math.min(22, s2 + l2) : s2 + l2), kind: 'main' });
   }
-  const w = Math.round(rnd(sp.wage[0], sp.wage[1]) / 10) * 10, leader = sp.max != null;
-  const type = leader ? '社員' : pick(['アルバイト', 'アルバイト', 'パート']);
-  const dayMs = 864e5, now = Date.now(), birthDate = d => { const x = new Date(d); return ymd(x); };
-  const birth = minor ? birthDate(now - (16 + rnd(0, 1)) * 365.25 * dayMs - rnd(0, 300) * dayMs) : (Math.random() < 0.8 ? birthDate(now - rnd(19, 55) * 365.25 * dayMs - rnd(0, 300) * dayMs) : '');
+  const w = Math.round(rnd(sp.wage[0], sp.wage[1]) / 10) * 10, type = per.type;
+  const dayMs = 864e5, now = Date.now(), birth = ymd(new Date(now - (per.age * 365.25 + rnd(2, 362)) * dayMs));   // 年齢から誕生日を作る
+  const capP = leader ? 0.08 : { wife: 0.35, uni: 0.25, senior: 0.1 }[per.persona] || 0;   // 扶養内などで、収入を抑えたい人
+  const dpwBy = { uni: { min: 2, max: 4 }, hs: { min: 1, max: 3 }, wife: { min: 3, max: 4 }, senior: { min: 2, max: 4 }, free: { min: 3, max: 5 } };
   return {
     id: 's' + Date.now() + '_r' + idx, name, role: sp.name, rating: rnd(sp.rating[0], sp.rating[1]), wage: w > min + 20 ? w : 0, cur: 'JPY',
-    type, birth, avail, dpw: leader ? { min: 5, max: 5 } : minor ? { min: 1, max: 3 } : type === 'パート' ? { min: 3, max: 4 } : (Math.random() < 0.5 ? { min: 2, max: 4 } : null),
-    weeklyMax: minor ? 28 : (type === 'パート' && Math.random() < 0.4) ? pick([20, 24, 28]) : 0,        // 働き方を抑えたい人（例）
-    incomeCap: (!leader && !minor && Math.random() < 0.15) ? pick([88000, 108000]) : 0,
-    join: Math.random() < 0.04 ? ymd(new Date(now + rnd(3, 14) * dayMs)) : '', leave: Math.random() < 0.03 ? ymd(new Date(now + rnd(10, 25) * dayMs)) : ''
+    type, birth, avail, dpw: sein ? { min: 5, max: 5 } : leader ? { min: 4, max: 5 } : minor ? { min: 1, max: 3 } : (Math.random() < 0.2 ? null : dpwBy[per.persona]),
+    weeklyMax: sein ? 0 : minor ? 28 : (type === 'パート' && Math.random() < 0.4) ? pick([20, 24, 28]) : 0,        // 働き方を抑えたい人（例）
+    incomeCap: (!sein && !minor && Math.random() < capP) ? pick([88000, 108000]) : 0,
+    join: !sein && Math.random() < 0.04 ? ymd(new Date(now + rnd(3, 14) * dayMs)) : '', leave: !sein && Math.random() < 0.03 ? ymd(new Date(now + rnd(10, 25) * dayMs)) : ''
   };
 }
+
 const addSupply = (sup, s, open, close) => (s.avail || []).filter(x => x.kind !== 'sub').forEach(x => {
-  for (let h = toH(x.start); h < toH(x.end, true); h++) ['wd', 'we'].forEach(t => { if (sup[t][h] !== undefined) sup[t][h] += frac(slotDays(x), t); });
+  const k = Math.min(1, 8 / Math.max(1, toH(x.end, true) - toH(x.start)));   // 出られる時間が長くても、1日に働くのは8時間ほど（社員の「ほぼ通しで出られる」を、過大に数えない）
+  for (let h = toH(x.start); h < toH(x.end, true); h++) ['wd', 'we'].forEach(t => { if (sup[t][h] !== undefined) sup[t][h] += frac(slotDays(x), t) * k; });
 });
 /* 企業が「各時間帯の必要人数が足りるように採用する」イメージ：平日・休日それぞれで足りない時間帯を見つけて、そこに出勤できる人を足していく。
    従業員は、出勤できる日の約64%（週4.5日ぶん）しか出勤しない想定で、必要人数の約1.56倍（× 余裕）の人が出勤できるまで採用する */
@@ -128,16 +173,21 @@ function randomStaffDemand(indKey, scale, margin) {
   const ind = INDUSTRIES[indKey], open = state.open, close = state.close, span = close - open;
   const used = new Set(state.staff.map(s => s.name)), counts = {}, out = [], sup = { wd: {}, we: {} };
   for (let h = open; h < close; h++) { sup.wd[h] = 0; sup.we[h] = 0; }
-  state.staff.forEach(s => { counts[s.role] = (counts[s.role] || 0) + 1; addSupply(sup, s); });
+  const ruled = Object.entries(ROLE_MIN[indKey] || {}), supR = {};   // 役割ごとの最低人数がある持ち場は、その持ち場ができる人も数える
+  ruled.forEach(([r]) => { supR[r] = { wd: {}, we: {} }; for (let h = open; h < close; h++) { supR[r].wd[h] = 0; supR[r].we[h] = 0; } });
+  const addRoleSupply = s => { const sk = skillsOf(s), w = sk.length > 1 ? 0.6 : 1; ruled.forEach(([r]) => { if (!sk.includes(r)) return; (s.avail || []).filter(x => x.kind !== 'sub').forEach(x => { const k = Math.min(1, 8 / Math.max(1, toH(x.end, true) - toH(x.start))); for (let h = toH(x.start); h < toH(x.end, true); h++) ['wd', 'we'].forEach(t => { if (supR[r][t][h] !== undefined) supR[r][t][h] += frac(slotDays(x), t) * w * k; }); }); }); };   // 兼務できる人は、持ち場ごとに0.6人ぶん
+  state.staff.forEach(s => { counts[s.role] = (counts[s.role] || 0) + 1; addSupply(sup, s); addRoleSupply(s); });
   const need = (t, h) => Math.ceil(demandAt(ind, h, scale) * (t === 'we' ? ind.wk : 1) * 1.56 * margin);
   const specs = ind.roles, boss = specs.find(sp => sp.boss), room = x => x.w > 0 && (x.max == null || (counts[x.name] || 0) < x.max);
   for (let i = 0; i < 300; i++) {
     let worst = null;
     ['wd', 'we'].forEach(t => { for (let h = open; h < close; h++) { const gap = need(t, h) - sup[t][h]; if (gap > 0 && (!worst || gap > worst.gap)) worst = { t, h, gap }; } });
+    ruled.forEach(([r, m]) => { const spR = specs.find(x => x.name === r); if (!spR || !room(spR)) return; ['wd', 'we'].forEach(t => { for (let h = open; h < close; h++) { const gap = Math.ceil(m * 1.56 * margin) - supR[r][t][h]; if (gap > 0 && (!worst || gap > worst.gap)) worst = { t, h, gap, role: r }; } }); });
     if (!worst) break;
     const { t, h: hc } = worst;
     let sp, isBoss = false;
     if (boss && !(counts[boss.name] || 0)) { sp = boss; isBoss = true; }
+    else if (worst.role) sp = specs.find(x => x.name === worst.role);
     else {
       const ok = specs.filter(x => room(x) && (x.win !== 'night' || hc >= close - 9) && !(x.win === 'early' && hc > open + span * 0.65));
       const pool = ok.length ? ok : specs.filter(room);
@@ -146,7 +196,7 @@ function randomStaffDemand(indKey, scale, margin) {
     }
     counts[sp.name] = (counts[sp.name] || 0) + 1;
     const len = Math.min(span, rnd(sp.len[0], sp.len[1])), st = Math.min(close - len, Math.max(open, hc - rnd(0, len - 1)));
-    const s = buildStaff(sp, st, st + len, isBoss, used, out.length, pickDays(t)); out.push(s); addSupply(sup, s);
+    const s = addSkills(buildStaff(sp, st, st + len, isBoss, used, out.length, pickDays(t), pickPersona(sp, hc, t)), indKey); out.push(s); addSupply(sup, s); addRoleSupply(s);
   }
   return out;
 }
@@ -187,7 +237,7 @@ function randomStaff(n, indKey) {
     const len = Math.min(span, rnd(sp.len[0], sp.len[1])), slack = Math.max(0, span - len);
     const kind = sp.win === 'any' ? ['early', 'any', 'late'][i % 3] : sp.win;   // 朝・昼・夜がばらけるようにする
     const st = open + (kind === 'early' ? rnd(0, Math.floor(slack / 3)) : kind === 'late' ? slack - rnd(0, Math.floor(slack / 3)) : kind === 'night' ? slack : rnd(0, slack));
-    out.push(buildStaff(sp, st, Math.min(close, st + len), isBoss, used, i, pickDays()));
+    out.push(addSkills(buildStaff(sp, st, Math.min(close, st + len), isBoss, used, i, pickDays(), pickPersona(sp, st, undefined)), indKey));
   }
   // 平日・休日のどの時間にも、出勤できる人が1人はいるようにする
   const all = [...state.staff, ...out];
@@ -213,8 +263,8 @@ const rangeTxt = ks => ks.length === 1 ? mdText(ks[0]) : `${mdText(ks[0])}〜${m
 const listTxt = ks => ks.map(mdText).join('、');
 function traitsOf(s) {   // 人の事情（同じ人は、いつも同じ）
   const r = prng32(strSeed('trait:' + s.id)), age = s.birth ? ageOn(s, todayKey()) : null, minor = age !== null && age < 18, part = s.type !== '社員';
-  const student = minor || (age !== null && age <= 23 && part && r() < 0.85);
-  const parent = !student && age !== null && age >= 28 && age <= 52 && r() < (s.type === 'パート' ? 0.6 : 0.3);
+  const student = minor || (age !== null && age <= 23 && s.type === 'アルバイト' && r() < 0.9);
+  const parent = !student && age !== null && age >= 28 && age <= 55 && r() < (s.type === 'パート' ? 0.7 : s.type === '社員' ? 0.5 : 0.2);
   return { age, minor, student, parent, jobhunt: student && !minor && age >= 20 && r() < 0.35, boss: !part };
 }
 function randomPrefs(p, mult = 1) {
@@ -275,7 +325,7 @@ function renderDev() {
   renderAdmins();
   $('#dLayout').value = state.settings.layout || 'auto';
   const kb = Math.round((localStorage.getItem(KEY) || '').length / 102.4) / 10;
-  $('#dInfo').textContent = `従業員 ${state.staff.length}人 ／ シフトのある日 ${Object.keys(state.shifts).length}日 ／ 保存データ 約${kb}KB`;
+  $('#dInfo').textContent = `従業員 ${state.staff.length}人（社員 ${state.staff.filter(s => s.type === '社員').length}・パート ${state.staff.filter(s => s.type === 'パート').length}・アルバイト ${state.staff.filter(s => s.type === 'アルバイト').length}／兼務できる人 ${state.staff.filter(s => skillsOf(s).length > 1).length}人） ／ シフトのある日 ${Object.keys(state.shifts).length}日 ／ 保存データ 約${kb}KB`;
   $('#dReport').textContent = supplyReport();
   syncDevCount();
 }

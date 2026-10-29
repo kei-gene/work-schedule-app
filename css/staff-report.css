@@ -61,3 +61,10 @@ body[data-layout="mobile"] .dchip{width:38px;height:38px}
 .arday .last{color:var(--sub);font-size:12px;margin-top:8px}
 .rlead{display:flex;align-items:center;gap:4px;font-size:12px;margin:0;color:var(--sub);white-space:nowrap}
 .rlead input{width:auto;margin:0}
+/* ---- 兼務できる持ち場 ---- */
+.skillchips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 4px}
+.skchip{--c:#0f6e6e;border:1px solid var(--c);background:#fff;color:var(--c);padding:5px 12px;border-radius:16px;font:inherit;font-size:13px;cursor:pointer}
+.skchip.on{background:var(--c);color:#fff;font-weight:700}
+.badge.sk{background:#fff;border:1px solid;font-weight:700}
+.emtable .badge.sk{margin-left:4px}
+#sStWrap{margin:0 0 12px}

@@ -135,8 +135,8 @@ Object.entries(AR_FIELDS).forEach(([, id]) => $('#' + id).addEventListener('chan
 let editingRole = null;
 function renderRoles() {
   $('#roleList').innerHTML = state.roles.length ? state.roles.map((r, i) => {
-    const n = state.staff.filter(s => s.role === r.name).length;
-    return `<li draggable="true" data-ri="${i}"><span class="grip" title="ドラッグで並び替え">⠿</span><div class="info"><span class="badge" style="background:${r.color}">${esc(r.name)}</span> <span class="meta">${n}人</span></div>
+    const n = state.staff.filter(s => s.role === r.name).length, m = state.staff.filter(s => s.role !== r.name && (s.skills || []).includes(r.name)).length;
+    return `<li draggable="true" data-ri="${i}"><span class="grip" title="ドラッグで並び替え">⠿</span><div class="info"><span class="badge" style="background:${r.color}">${esc(r.name)}</span> <span class="meta">${n}人${m ? `・兼務${m}人` : ''}</span></div>
       <label class="rlead"><input type="checkbox" data-rlead="${i}"${r.lead ? ' checked' : ''}> 責任者</label>
       <button class="btn small" data-rup="${i}"${i === 0 ? ' disabled' : ''} aria-label="上へ">▲</button>
       <button class="btn small" data-rdn="${i}"${i === state.roles.length - 1 ? ' disabled' : ''} aria-label="下へ">▼</button>
@@ -159,7 +159,7 @@ $('#roleForm').addEventListener('submit', e => {
   } else {
     const r = state.roles[editingRole], old = r.name;
     r.name = name; r.color = color;
-    state.staff.forEach(s => { if (s.role === old) s.role = name; }); // 名前変更を従業員にも反映
+    state.staff.forEach(s => { if (s.role === old) s.role = name; if (s.skills) s.skills = s.skills.map(n => n === old ? name : n); }); // 名前変更を従業員にも反映
     if (old !== name && state.roleRules[old]) { state.roleRules[name] = state.roleRules[old]; delete state.roleRules[old]; }
     ui.toast(`役割「${name}」を変更しました`);
   }
@@ -178,6 +178,7 @@ $('#roleList').addEventListener('click', async e => {
     const msg = users.length ? `役割「${r.name}」を削除します。${users.length}人の従業員の役割は「選択なし」になります。` : `役割「${r.name}」を削除します。`;
     if (!await ui.ask(msg, { ok: '削除する', danger: true })) return;
     users.forEach(s => s.role = '');
+    state.staff.forEach(s => { if (s.skills) s.skills = s.skills.filter(n => n !== r.name); });
     delete state.roleRules[r.name];
     state.roles.splice(del, 1); save(); resetRoleForm(); renderRoles(); renderGantt(); ui.toast('役割を削除しました');
   }

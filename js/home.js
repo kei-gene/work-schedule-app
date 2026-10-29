@@ -159,12 +159,12 @@ function renderWork(keep) {
   let total = 0;
   let html = '<table class="gantt" style="width:' + (D.n + H.length * D.c) + 'px"><colgroup><col style="width:' + D.n + 'px">' + H.map(() => `<col style="width:${D.c}px">`).join('') + '</colgroup><thead><tr><th class="name">従業員</th>' + H.map(h => `<th>${fmt(h)}</th>`).join('') + '</tr></thead><tbody>';
   rows.forEach(s => {
-    const sh = dayShifts(k)[s.id], isW = isWork(sh), color = roleColor(s.role), off = adminPref(s.id, k, pk).status === 'off';
+    const sh = dayShifts(k)[s.id], isW = isWork(sh), stName = stationOf(s, sh), color = roleColor(stName), off = adminPref(s.id, k, pk).status === 'off';
     const w = work[s.id] || [], b = brk[s.id] || [], cells = w.length + b.length;
     const win = isW ? shiftHourList(sh) : (shiftOn ? [] : mainHours(s, k)), sub = (!isW && !shiftOn) ? subHours(s, k) : [];
     const hrs = manual ? w.length : (isW ? shiftHours(sh) : 0), cost = (isW && !manual) ? shiftCost(s, sh) : hourly(s) * hrs; total += cost;
     const needBrk = manual && cells > 6 && b.length * 60 < legalBreak(cells);   // 法定の休憩が足りない
-    html += `<tr><th class="name"><b>${esc(s.name)}</b><div class="meta">${esc(s.role || '役割なし')} ／ <span class="stars">${stars(s.rating)}</span></div>
+    html += `<tr><th class="name"><b>${esc(s.name)}</b><div class="meta">${esc(s.role || '役割なし')}${stName !== s.role ? '→' + esc(stName) : ''} ／ <span class="stars">${stars(s.rating)}</span></div>
       <div class="meta${off || needBrk ? ' warnText' : ''}">${isW ? hm(sh.start) + '–' + hm(sh.end) + '・' : ''}${fh(hrs)}時間${isW && sh.brk ? '・休憩' + sh.brk + '分' : ''}・${money(cost)}${off ? '・希望休' : ''}${needBrk ? '・⚠休憩が足りません' : ''}</div></th>`;
     H.forEach(h => {
       const on = w.includes(h), br = b.includes(h);
@@ -180,7 +180,7 @@ function renderWork(keep) {
     const q = state.roleRules[ro.name];
     if (!q || (!q.min && q.max == null)) return;
     html += `<tr><th class="name"><span style="color:${ro.color}">●</span> ${esc(ro.name)}の人数<small>${q.min}〜${q.max == null ? '制限なし' : q.max}</small></th>`;
-    H.forEach(h => { const c = rows.filter(s => s.role === ro.name && (work[s.id] || []).includes(h)).length; html += `<td class="${c < q.min ? 'low' : q.max != null && c > q.max ? 'high' : ''}">${c}</td>`; });
+    H.forEach(h => { const c = rows.filter(s => stationOf(s, dayShifts(k)[s.id]) === ro.name && (work[s.id] || []).includes(h)).length; html += `<td class="${c < q.min ? 'low' : q.max != null && c > q.max ? 'high' : ''}">${c}</td>`; });
     html += '</tr>';
   });
   wrap.innerHTML = html + '</tfoot></table>';

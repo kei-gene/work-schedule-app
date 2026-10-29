@@ -215,7 +215,7 @@
 
       <div class="card">
         <h2>ランダムで従業員を登録</h2>
-        <p class="meta">名前・役割・評価・希望勤務時間・時給（円／ドル）・出退勤時間・予備の時間を、すべてランダムに作ります。役割は、今ある役割から選ばれます。出退勤時間は、設定タブの表示時間の範囲に収まります。</p>
+        <p class="meta">名前・役割・評価・希望勤務時間・時給（円／ドル）・出退勤時間・予備の時間を、すべてランダムに作ります。役割は、今ある役割から選ばれます。出退勤時間は、設定タブの表示時間の範囲に収まります。年齢と雇用区分も現実に近づけます（社員は店長・副店長級、リーダーはベテランのパート・アルバイト、アルバイトは学生・フリーター中心、パートは主婦（夫）・シニア中心）。業態を選ぶと、バイト・パートの一部が、ほかの持ち場も兼務できる人になります（評価が高いほど多め）。ホール・キッチンなどの最低人数ルールも入り、それを満たせるように採用します。</p>
         <div class="row2">
           <label>人数（1〜50）<input type="number" id="dCount" min="1" max="50" value="8"></label>
           <label>登録のしかた
@@ -417,7 +417,7 @@
           <thead><tr><th>役割</th><th>最低人数</th><th>最高人数</th></tr></thead>
           <tbody id="roleRuleBody"></tbody>
         </table>
-        <p class="meta help">最高人数を空欄にすると上限なしです。役割は設定タブで追加・編集できます。</p>
+        <p class="meta help">最高人数を空欄にすると上限なしです。役割は設定タブで追加・編集できます。兼務できる従業員は、その日に入る持ち場の人数として数えます。</p>
       </div>
       </div>
     </div>
@@ -530,6 +530,10 @@
         <label>名前<input type="text" id="fName"></label>
         <label>役割（階級）<select id="fRole"></select></label>
       </div>
+      <div class="field">兼務できる持ち場（任意）
+        <div id="fSkills" class="skillchips"></div>
+        <p class="meta">主な役割のほかに、教わって一人でできるレベルの持ち場を選びます。自動作成が、人数が足りない持ち場へ、その日だけ入れます（店長・副店長などは、ふつう選びません）。</p>
+      </div>
       <div class="row2">
         <div class="field">評価<div id="fStars" class="stars input"></div></div>
         <label>時給（管理者が設定）
@@ -617,6 +621,7 @@
       <div class="field">出勤<div id="sStart"></div></div>
       <div class="field">退勤<div id="sEnd"></div></div>
     </div>
+    <label id="sStWrap" hidden>入る持ち場（兼務できる人だけ）<select id="sSt"></select></label>
     <div class="shift-quick">
       <button type="button" class="btn small" id="sFillMain">通常の時間を入れる</button>
       <button type="button" class="btn small" id="sFillSub" hidden>予備の時間を入れる</button>

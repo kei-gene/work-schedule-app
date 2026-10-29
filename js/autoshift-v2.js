@@ -33,6 +33,11 @@ async function autoShiftsV2(p, keep, seedOffset, onProgress) {
   const rtgt = H.map((h, i) => R.fill === 'min' ? rmin[i] : R.fill === 'max' ? rmax[i] : Math.ceil((rmin[i] + rmax[i]) / 2));
   const roleNames = state.roles.map(r => r.name), RN = roleNames.length + 1;
   const ri = E.map(s => { const i = roleNames.indexOf(s.role); return i < 0 ? RN - 1 : i; });
+  // 兼務：skl＝その人が入れる持ち場（役割の番号）、defSt＝ふだん入る持ち場、stn＝その日に入る持ち場（日ごとに1つ）
+  const skl = E.map(s => { const a = []; skillsOf(s).forEach(nm => { const i = roleNames.indexOf(nm); if (i >= 0 && !a.includes(i)) a.push(i); }); return a.length ? a : [RN - 1]; });
+  const defSt = E.map((s, e) => skl[e].includes(ri[e]) ? ri[e] : skl[e][0]), stn = new Int16Array(N * D).fill(-1);
+  const multiIdx = []; skl.forEach((a, e) => { if (a.length > 1) multiIdx.push(e); });
+  const stIdx = (s, sh) => { const k2 = roleNames.indexOf(stationOf(s, sh)); return k2 < 0 ? RN - 1 : k2; };
   const isLead = E.map(s => !!(state.roles.find(r => r.name === s.role) || {}).lead), leadMin = (A.leadMin > 0 && isLead.some(Boolean)) ? A.leadMin : 0;
   const rr = roleNames.map((n, i) => ({ i, q: state.roleRules[n] })).filter(x => x.q && (x.q.min || x.q.max != null));
   const dayRule = keys.map(k => dayRuleOf(k));
@@ -49,7 +54,7 @@ async function autoShiftsV2(p, keep, seedOffset, onProgress) {
   E.forEach((s, e) => keys.forEach((k, d) => {
     const i = e * D + d, rec = dayShifts(k)[s.id], fx = rec && !rec.auto ? rec : null, pref = adminPref(s.id, k, pk), emp = employedOn(s, k);
     fixedRec[i] = fx; autoOffOk[i] = (emp && pref.status !== 'off') ? 1 : 0; cands[i] = [];
-    if (fx) { if (!isWork(fx)) autoCnt[i] = 1; if (isWork(fx)) { const a = Math.floor(tmin(fx.start) / 60), b = Math.ceil(tmin(fx.end) / 60); fixedCand[i] = mkCand(s, a, b, true, new Set()) || { a, b, len: b - a, brk: fx.brk || 0, work: shiftHours(fx), pat: true, cost: shiftCost(s, fx), base: 0 }; fixedCand[i].base = 0; } return; }
+    if (fx) { if (!isWork(fx)) autoCnt[i] = 1; if (isWork(fx)) { const a = Math.floor(tmin(fx.start) / 60), b = Math.ceil(tmin(fx.end) / 60); fixedCand[i] = mkCand(s, a, b, true, new Set()) || { a, b, len: b - a, brk: fx.brk || 0, work: shiftHours(fx), pat: true, cost: shiftCost(s, fx), base: 0 }; fixedCand[i].base = 0; stn[i] = stIdx(s, fx); } return; }
     if (!emp || pref.status === 'off') return;
     let main = mainHours(s, k).filter(h => H.includes(h)), sub = subHours(s, k).filter(h => H.includes(h));
     if (pref.status === 'time') { const lo = toH(pref.start), hi = toH(pref.end, true); main = main.filter(h => h >= lo && h < hi); sub = sub.filter(h => h >= lo && h < hi); }
@@ -79,14 +84,14 @@ async function autoShiftsV2(p, keep, seedOffset, onProgress) {
     let ci = cands[i].findIndex(c => c.a === a && c.b === b);
     autoCnt[i] = 1;
     if (ci < 0) { const c = mkCand(s, a, b, false, new Set()) || { a, b, len: b - a, brk: rec.brk || 0, work: shiftHours(rec), pat: false, cost: shiftCost(s, rec), base: 0 }; cands[i].push(c); ci = cands[i].length - 1; hasCand[e] = 1; }
-    cur[i] = ci;
+    cur[i] = ci; const sx = rec.st ? roleNames.indexOf(rec.st) : -1; stn[i] = skl[e].includes(sx) ? sx : defSt[e];
   }));
   const candAt = (e, d) => { const i = e * D + d; return fixedCand[i] || (cur[i] >= 0 ? cands[i][cur[i]] : null); };
   const addC = (e, d, c, sg) => {
-    for (let h = c.a; h < c.b; h++) { const q = d * Hn + (h - h0); if (h - h0 < 0 || h - h0 >= Hn) continue; cov[q] += sg; if (isLead[e]) lcov[q] += sg; rcov[q * RN + ri[e]] += sg; }
+    for (let h = c.a; h < c.b; h++) { const q = d * Hn + (h - h0); if (h - h0 < 0 || h - h0 >= Hn) continue; cov[q] += sg; if (isLead[e]) lcov[q] += sg; rcov[q * RN + (stn[e * D + d] >= 0 ? stn[e * D + d] : ri[e])] += sg; }
     workers[d] += sg; days[e] += sg; if (isWE[d]) we[e] += sg;
   };
-  const setCell = (e, d, idx) => { const i = e * D + d, old = cur[i]; if (old >= 0) addC(e, d, cands[i][old], -1); cur[i] = idx; if (idx >= 0) addC(e, d, cands[i][idx], 1); };
+  const setCell = (e, d, idx, st) => { const i = e * D + d, old = cur[i]; if (old >= 0) addC(e, d, cands[i][old], -1); cur[i] = idx; stn[i] = idx >= 0 ? (st !== undefined ? st : defSt[e]) : -1; if (idx >= 0) addC(e, d, cands[i][idx], 1); };
   const rebuild = () => { cov.fill(0); lcov.fill(0); rcov.fill(0); workers.fill(0); days.fill(0); we.fill(0); for (let e = 0; e < N; e++) for (let d = 0; d < D; d++) { const c = candAt(e, d); if (c) addC(e, d, c, 1); } };
 
   // ---- 期間の外にある勤務（週・月・連勤・勤務間の時間の計算に使う）----
@@ -100,6 +105,17 @@ async function autoShiftsV2(p, keep, seedOffset, onProgress) {
   E.forEach((s, e) => { for (let i = 1; i <= S.maxStreak + 1; i++) { const sh = dayShifts(ymd(addDays(first, -i)))[s.id]; if (isWork(sh)) { preRun[e]++; if (i === 1) preEnd[e] = Math.ceil(tmin(sh.end) / 60); } else break; } });
   const dlo = new Float64Array(N), dhi = new Float64Array(N), midT = new Float64Array(N), cap = new Float64Array(N), wLim = new Float64Array(N);
   E.forEach((s, e) => { const dp = s.dpw || A.dpw; const any = hasCand[e] || keys.some((k, d) => fixedCand[e * D + d]); dlo[e] = any ? dp.min : 0; dhi[e] = any ? dp.max : 0; midT[e] = (dlo[e] + dhi[e]) / 2 * D / 7; cap[e] = s.incomeCap ? toDisp(s.incomeCap, 'JPY') : 0; wLim[e] = Math.min(S.limitWeek, s.weeklyMax || Infinity); });
+
+  // 兼務できる人は、その日に入る持ち場を「人数が足りない持ち場」から選ぶ
+  const rmnR = roleNames.map(n => (state.roleRules[n] && state.roleRules[n].min) || 0), rmxR = roleNames.map(n => { const q = state.roleRules[n]; return q && q.max != null ? q.max : Infinity; });
+  const pickSt = (e, d, c) => {
+    const sk = skl[e]; if (sk.length < 2) return defSt[e];
+    const i = e * D + d, had = cur[i] >= 0 && cands[i][cur[i]] === c; if (had) addC(e, d, c, -1);   // いまの自分の分は、数えない状態で比べる
+    let best = defSt[e], bs = -1e9;
+    sk.forEach(r => { let sc = r === defSt[e] ? 0.5 : 0; for (let h = c.a; h < c.b; h++) { const q = d * Hn + (h - h0); if (h - h0 < 0 || h - h0 >= Hn) continue; const v = rcov[q * RN + r]; if (rmnR[r] && v < rmnR[r]) sc += 3 * (rmnR[r] - v); else if (v >= rmxR[r]) sc -= 3; } if (sc > bs) { bs = sc; best = r; } });
+    if (had) addC(e, d, c, 1);
+    return best;
+  };
 
   // ---- 点数（低いほど良い）----
   const dayCost = d => {
@@ -145,24 +161,32 @@ async function autoShiftsV2(p, keep, seedOffset, onProgress) {
 
   // ---- 入れ替えを繰り返す ----
   rebuild();
+  for (let d = 0; d < D; d++) for (const e of multiIdx) { const i = e * D + d; if (fixedRec[i] || cur[i] < 0) continue; const c = cands[i][cur[i]], ns = pickSt(e, d, c); if (ns !== stn[i]) { addC(e, d, c, -1); stn[i] = ns; addC(e, d, c, 1); } }   // 最初の持ち場の割り振り
   const dayC = new Float64Array(D), empC = new Float64Array(N); let fairC = 0, total = 0;
   const recompute = () => { total = 0; for (let d = 0; d < D; d++) { dayC[d] = dayCost(d); total += dayC[d]; } for (let e = 0; e < N; e++) { empC[e] = empCost(e); total += empC[e]; } fairC = fairCost(); total += fairC; };
   recompute(); const startCost = total;
   const attempt = (chs, T, probe) => {
     const ds = [], es = []; chs.forEach(([e, d]) => { if (!ds.includes(d)) ds.push(d); if (!es.includes(e)) es.push(e); });
     let before = fairC; ds.forEach(d => { before += dayC[d]; }); es.forEach(e => { before += empC[e]; });
-    const olds = chs.map(([e, d]) => cur[e * D + d]);
-    chs.forEach(([e, d, idx]) => setCell(e, d, idx));
+    const olds = chs.map(([e, d]) => cur[e * D + d]), oldSt = chs.map(([e, d]) => stn[e * D + d]);
+    chs.forEach(([e, d, idx]) => setCell(e, d, idx, idx >= 0 ? pickSt(e, d, cands[e * D + d][idx]) : undefined));
     const nf = fairCost(), nd = ds.map(d => dayCost(d)), ne = es.map(e => empCost(e));
     let after = nf; nd.forEach(x => { after += x; }); ne.forEach(x => { after += x; });
     const delta = after - before;
     if (!probe && (delta <= 0 || rng() < Math.exp(-delta / T))) { ds.forEach((d, j) => { dayC[d] = nd[j]; }); es.forEach((e, j) => { empC[e] = ne[j]; }); fairC = nf; total += delta; return true; }
-    for (let j = chs.length - 1; j >= 0; j--) setCell(chs[j][0], chs[j][1], olds[j]);
+    for (let j = chs.length - 1; j >= 0; j--) setCell(chs[j][0], chs[j][1], olds[j], olds[j] >= 0 ? oldSt[j] : undefined);
     return probe ? delta : false;
+  };
+  const attemptStation = (e, d, ns, T) => {   // 持ち場だけを変える（シフトの時間は同じ）
+    const i = e * D + d, c = cands[i][cur[i]], os = stn[i], before = dayC[d];
+    addC(e, d, c, -1); stn[i] = ns; addC(e, d, c, 1);
+    const nd = dayCost(d), delta = nd - before;
+    if (delta <= 0 || rng() < Math.exp(-delta / T)) { dayC[d] = nd; total += delta; return true; }
+    addC(e, d, c, -1); stn[i] = os; addC(e, d, c, 1); return false;
   };
   const randCell = () => { for (let t = 0; t < 10; t++) { const e = rint(N), d = rint(D), i = e * D + d; if (cands[i].length) return [e, d]; } return null; };
   const shortHours = d => { const o = [], b = d * Hn; for (let i = 0; i < Hn; i++) if (cov[b + i] < rmin[i] || (leadMin && lcov[b + i] < leadMin)) o.push(i); return o; };
-  let shortDaysList = [], iters = 0, best = total, lastY = nowMs(); const bestCur = Int32Array.from(cur);
+  let shortDaysList = [], iters = 0, best = total, lastY = nowMs(); const bestCur = Int32Array.from(cur), bestStn = Int16Array.from(stn);
   const tOpt = nowMs(), remain = Math.max(100, budget - (tOpt - t0));
   while (true) {
     if ((iters & 127) === 0) {
@@ -173,6 +197,11 @@ async function autoShiftsV2(p, keep, seedOffset, onProgress) {
     }
     iters++;
     const r = rng(); let done = false;
+    if (multiIdx.length && rng() < 0.12) {   // 兼務できる人の持ち場を入れ替える
+      const e = multiIdx[rint(multiIdx.length)], dd = []; for (let d = 0; d < D; d++) { const i = e * D + d; if (!fixedRec[i] && cur[i] >= 0) dd.push(d); }
+      if (dd.length) { const d = dd[rint(dd.length)], i = e * D + d, ns = skl[e][rint(skl[e].length)]; if (ns !== stn[i]) attemptStation(e, d, ns, T); }
+      continue;
+    }
     if (r < 0.4 && shortDaysList.length) {   // 人数が足りない日に、入れる人を足す
       const d = shortDaysList[rint(shortDaysList.length)], hs = shortHours(d), hh2 = hs.length ? hs[rint(hs.length)] + h0 : null, s0 = rint(N);
       for (let t = 0; t < N && !done; t++) {
@@ -190,16 +219,17 @@ async function autoShiftsV2(p, keep, seedOffset, onProgress) {
       const e = rint(N), a = [], b = []; for (let d = 0; d < D; d++) { const i = e * D + d; if (fixedRec[i]) continue; if (cur[i] >= 0) a.push(d); else if (cands[i].length) b.push(d); }
       if (a.length && b.length) { const d1 = a[rint(a.length)], d2 = b[rint(b.length)], c1 = cands[e * D + d1][cur[e * D + d1]], l2 = cands[e * D + d2]; let ci = l2.findIndex(c => c.a === c1.a && c.b === c1.b); if (ci < 0) ci = rint(l2.length); attempt([[e, d1, -1], [e, d2, ci]], T); }
     }
-    if ((iters & 511) === 0 && total < best - 1e-6) { best = total; bestCur.set(cur); }
+    if ((iters & 511) === 0 && total < best - 1e-6) { best = total; bestCur.set(cur); bestStn.set(stn); }
   }
-  if (best < total - 1e-6) { cur.set(bestCur); rebuild(); recompute(); }
+  if (best < total - 1e-6) { cur.set(bestCur); stn.set(bestStn); rebuild(); recompute(); }
 
   // ---- 結果を書きこむ ----
+  let stSwitch = 0;
   keys.forEach((k, d) => {
     E.forEach((s, e) => {
       const i = e * D + d; if (fixedRec[i]) return;
       if (state.shifts[k]) delete state.shifts[k][s.id];
-      if (cur[i] >= 0) { const c = cands[i][cur[i]]; (state.shifts[k] = state.shifts[k] || {})[s.id] = { start: pad2(c.a) + ':00', end: pad2(c.b) + ':00', brk: c.brk, auto: true }; }
+      if (cur[i] >= 0) { const c = cands[i][cur[i]], sn = stn[i] >= 0 && stn[i] < roleNames.length ? roleNames[stn[i]] : '', sw = sn && sn !== s.role; if (sw) stSwitch++; (state.shifts[k] = state.shifts[k] || {})[s.id] = { start: pad2(c.a) + ':00', end: pad2(c.b) + ':00', brk: c.brk, auto: true, ...(sw ? { st: sn } : {}) }; }
       else if (autoOffOk[i]) (state.shifts[k] = state.shifts[k] || {})[s.id] = { off: true, auto: true };
     });
     if (state.shifts[k] && !Object.keys(state.shifts[k]).length) delete state.shifts[k];
@@ -244,7 +274,7 @@ async function autoShiftsV2(p, keep, seedOffset, onProgress) {
       else { run = 0; prevEnd = -1; if (autoCnt[e * D + d]) auto++; } }
     if (auto > A.restMax) restV++;
   });
-  lastReport = { at: Date.now(), label: pLabel(p), pk, ms: Math.round(nowMs() - t0), iters, startCost: Math.round(startCost), endCost: Math.round(total), shortages, fair, streakV, intV, restV, flexN, patN, leadMin, leadHours, leadDays, patterns: patterns.length, restMax: A.restMax, interval: A.interval };
+  lastReport = { at: Date.now(), label: pLabel(p), pk, stSwitch, multiN: multiIdx.length, ms: Math.round(nowMs() - t0), iters, startCost: Math.round(startCost), endCost: Math.round(total), shortages, fair, streakV, intV, restV, flexN, patN, leadMin, leadHours, leadDays, patterns: patterns.length, restMax: A.restMax, interval: A.interval };
   const shortDays = shortages.map(x => x.k);
   return { shortDays, relaxed: init.relaxed, report: lastReport };
 }
@@ -282,6 +312,7 @@ function renderReport() {
   const bad = r.shortages.length, dn = k => { const d = parseYmd(k); return `${d.getMonth() + 1}/${d.getDate()}（${DOW[d.getDay()]}）`; };
   let html = `<div class="sum${bad ? ' bad' : ''}"><b>${esc(r.label)}</b>　計算 ${(r.ms / 1000).toFixed(1)}秒（${r.iters.toLocaleString()}回の入れ替え）<br>` +
     (bad ? `⚠ 人数が足りない日が${bad}日あります。` : '✓ 人数が足りない日はありません。') + `<br>連勤の上限超え ${r.streakV}件 ／ 勤務の間の時間が足りない ${r.intV}件 ／ 自動の休みの連続（${r.restMax}日超え）${r.restV}件` +
+    (r.multiN ? ` ／ 兼務できる人 ${r.multiN}人（兼務の持ち場に入った勤務 ${r.stSwitch}件）` : '') +
     (r.patterns ? ` ／ 型に合わせた勤務 ${r.patN}件・型に合わない勤務 ${r.flexN}件` : '') +
     (r.leadMin ? `<br>責任者がいない時間：${r.leadHours}時間（${r.leadDays}日）${r.leadHours ? '　※責任者の人数や出勤日数が足りないときは、役割の見直しか、「責任者を各時間に置く人数」の調整が必要です' : ''}` : '') + '</div>';
   if (bad) {

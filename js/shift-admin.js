@@ -107,8 +107,8 @@ function dayCover(k) {   // その日の、時間ごとの配置人数
   let n = 0;
   state.staff.forEach(s => {
     const sh = dayShifts(k)[s.id]; if (!isWork(sh)) return;
-    n++;
-    for (let h = Math.floor(tmin(sh.start) / 60); h < Math.ceil(tmin(sh.end) / 60); h++) if (cnt[h] !== undefined) { cnt[h]++; roleAt[h][s.role] = (roleAt[h][s.role] || 0) + 1; }
+    n++; const stn = stationOf(s, sh);   // 兼務できる人は、その日に入る持ち場で数える
+    for (let h = Math.floor(tmin(sh.start) / 60); h < Math.ceil(tmin(sh.end) / 60); h++) if (cnt[h] !== undefined) { cnt[h]++; roleAt[h][stn] = (roleAt[h][stn] || 0) + 1; }
   });
   return { n, cnt, roleAt, H };
 }
@@ -143,11 +143,11 @@ const conflictOf = (sh, pref, s, k) => {   // 'req' 希望休の日 / 'out' 希�
 function shiftCell(s, k, pk, compact) {
   const sh = dayShifts(k)[s.id], pref = adminPref(s.id, k, pk), L = state.settings, attr = `data-id="${s.id}" data-d="${k}"`, c = compact ? ' c' : '';
   if (isWork(sh)) {
-    const hrs = shiftHours(sh), over = hrs > L.limitDay, cf = conflictOf(sh, pref, s, k);
-    const title = `${s.name} ${hm(sh.start)}–${hm(sh.end)}（実働${fh(hrs)}時間${sh.brk ? '・休憩' + sh.brk + '分' : ''}）${cf === 'req' ? ' ※希望休の日です' : cf === 'out' ? ' ※希望の時間外です' : ''}`;
+    const hrs = shiftHours(sh), over = hrs > L.limitDay, cf = conflictOf(sh, pref, s, k), stn = stationOf(s, sh), swSt = stn !== s.role;
+    const title = `${s.name} ${hm(sh.start)}–${hm(sh.end)}（実働${fh(hrs)}時間${sh.brk ? '・休憩' + sh.brk + '分' : ''}${swSt ? '・持ち場：' + stn : ''}）${cf === 'req' ? ' ※希望休の日です' : cf === 'out' ? ' ※希望の時間外です' : ''}`;
     const tag = !cf ? '' : compact ? '<em class="tag">!</em>' : `<em class="tag">${cf === 'req' ? '休希望' : '時間外'}</em>`;
-    const body = compact ? `<span>${hm(sh.start)}</span><span>${hm(sh.end)}</span>` : `${hm(sh.start)}–${hm(sh.end)}<small>${fh(hrs)}時間${over ? ' ⚠' : ''}</small>`;
-    return { hrs, html: `<td class="scell on${over ? ' over' : ''}${c}" style="background:${roleColor(s.role)}" title="${esc(title)}" ${attr}>${body}${tag}</td>` };
+    const body = compact ? `<span>${hm(sh.start)}</span><span>${hm(sh.end)}</span>` : `${hm(sh.start)}–${hm(sh.end)}<small>${fh(hrs)}時間${over ? ' ⚠' : ''}${swSt ? '・' + esc(stn) : ''}</small>`;
+    return { hrs, html: `<td class="scell on${over ? ' over' : ''}${c}" style="background:${roleColor(stn)}" title="${esc(title)}" ${attr}>${body}${tag}</td>` };
   }
   let cls, lab, title;
   if (!employedOn(s, k)) { cls = 'na'; lab = '—'; title = '入社前、または退職後'; }
@@ -207,7 +207,8 @@ function renderShiftMobile(keys, pk) {
     let chip, cls = '', style = '';
     if (isWork(sh)) {
       const cf = conflictOf(sh, pref, s, mDay);
-      chip = `${hm(sh.start)}–${hm(sh.end)}（${fh(shiftHours(sh))}時間）${cf === 'req' ? ' ※希望休の日' : cf === 'out' ? ' ※時間外' : ''}`; cls = 'work'; style = ` style="background:${roleColor(s.role)}"`;
+      const stn = stationOf(s, sh);
+      chip = `${hm(sh.start)}–${hm(sh.end)}（${fh(shiftHours(sh))}時間）${stn !== s.role ? '・' + stn : ''}${cf === 'req' ? ' ※希望休の日' : cf === 'out' ? ' ※時間外' : ''}`; cls = 'work'; style = ` style="background:${roleColor(stn)}"`;
     } else if (pref.status === 'off') { chip = '希望休'; cls = 'pf-off'; }
     else if (sh && sh.off) { chip = '休み'; cls = 'rest'; }
     else if (pref.status === 'time') { chip = `${hm(pref.start)}–${hm(pref.end)} のみ可`; cls = 'pf-time'; }

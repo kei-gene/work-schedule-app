@@ -50,6 +50,16 @@ function SlotEditor(rootSel, prefix, addSel) {
 }
 const adminSlots = SlotEditor('#fSlots', 'sl', '#fSlotAdd'), reqSlots = SlotEditor('#rSlots', 'rq', '#rSlotAdd');
 
+/* 兼務できる持ち場（主な役割のほかに、教わって一人でできるレベルの持ち場） */
+let formSkills = [];
+function renderSkillChips() {
+  const main = $('#fRole').value, box = $('#fSkills');
+  formSkills = formSkills.filter(n => n !== main && state.roles.some(r => r.name === n));
+  const list = state.roles.filter(r => r.name !== main);
+  box.innerHTML = list.length ? list.map(r => `<button type="button" class="skchip${formSkills.includes(r.name) ? ' on' : ''}" data-sk="${esc(r.name)}" style="--c:${r.color}" aria-pressed="${formSkills.includes(r.name)}">${esc(r.name)}</button>`).join('') : '<span class="meta">ほかの役割がありません。</span>';
+}
+$('#fSkills').addEventListener('click', e => { const b = e.target.closest('[data-sk]'); if (!b) return; const n = b.dataset.sk; formSkills = formSkills.includes(n) ? formSkills.filter(x => x !== n) : [...formSkills, n]; renderSkillChips(); });
+$('#fRole').addEventListener('change', renderSkillChips);
 function renderStarInput() {
   $('#fStars').innerHTML = [1, 2, 3, 4, 5].map(n => `<span data-n="${n}" class="${n <= formRating ? 'on' : ''}" role="button" aria-label="評価${n}">★</span>`).join('');
 }
@@ -72,6 +82,7 @@ function openEmp(id) {
   formRating = s ? s.rating : 3;
   renderRoleSelect();
   $('#fName').value = s ? s.name : ''; $('#fRole').value = s ? s.role : '';
+  formSkills = s ? (s.skills || []).slice() : []; renderSkillChips();
   $('#fWage').value = s && s.wage > 0 ? s.wage : ''; $('#fCur').value = s ? (s.cur || 'JPY') : 'JPY';
   $('#fType').value = s ? (s.type || '') : 'アルバイト'; $('#fBirth').value = s ? (s.birth || '') : '';
   $('#fJoin').value = s ? (s.join || '') : ''; $('#fLeave').value = s ? (s.leave || '') : '';
@@ -101,7 +112,7 @@ $('#staffForm').addEventListener('submit', e => {
   const err = adminSlots.check(); if (err) return ui.toast(err, 'err');
   const dmin = $('#fDpwMin').value, dmax = $('#fDpwMax').value;
   const dpw = (dmin === '' && dmax === '') ? null : { min: Math.min(+dmin || 0, +dmax || 0), max: Math.max(+dmin || 0, +dmax || 0) };
-  const d = { name, role: $('#fRole').value, rating: formRating, wage, cur, type: $('#fType').value, birth, join, leave, weeklyMax, incomeCap, dpw, avail: adminSlots.value() };
+  const d = { name, role: $('#fRole').value, skills: formSkills.filter(n => n !== $('#fRole').value && state.roles.some(r => r.name === n)), rating: formRating, wage, cur, type: $('#fType').value, birth, join, leave, weeklyMax, incomeCap, dpw, avail: adminSlots.value() };
   if (editingId) { Object.assign(state.staff.find(s => s.id === editingId), d); ui.toast('変更を保存しました'); }
   else { state.staff.push({ id: 's' + Date.now(), ...d }); ui.toast(`${name}さんを登録しました`); }
   save(); closeEmp(); renderStaffList(); renderGantt(); renderRoles();
@@ -121,7 +132,7 @@ function renderStaffList() {
   const sub = s => [s.type, s.birth ? (isMinor(s, today) ? `<b class="warnText">${ageOn(s, today)}歳（18歳未満）</b>` : `${ageOn(s, today)}歳`) : '', s.weeklyMax ? `週${s.weeklyMax}時間まで` : '', s.incomeCap ? `月${s.incomeCap.toLocaleString()}円まで` : '', s.dpw ? `週${s.dpw.min}〜${s.dpw.max}日` : '', s.join ? `入社 ${s.join.slice(5).replace('-', '/')}` : '', s.leave ? `退職 ${s.leave.slice(5).replace('-', '/')}` : ''].filter(Boolean).join('・');
   box.innerHTML = '<table class="emtable"><thead><tr><th>名前</th><th>役割</th><th>評価</th><th>時給</th><th>出勤できる曜日・時間</th><th></th></tr></thead><tbody>' + list.map(s => `<tr>
     <td class="nm"><b>${esc(s.name)}</b><div class="sub">${sub(s)}</div></td>
-    <td>${s.role ? `<span class="badge" style="background:${roleColor(s.role)}">${esc(s.role)}</span>` : '<span class="meta">—</span>'}</td>
+    <td>${s.role ? `<span class="badge" style="background:${roleColor(s.role)}">${esc(s.role)}</span>` : '<span class="meta">—</span>'}${(s.skills || []).filter(n => state.roles.some(r => r.name === n)).map(n => `<span class="badge sk" style="color:${roleColor(n)};border-color:${roleColor(n)}" title="兼務できる持ち場">${esc(n)}</span>`).join('')}</td>
     <td><span class="stars">${stars(s.rating)}</span></td>
     <td>${esc(wageText(s))}${belowMin(s) ? ' <span class="warnText">⚠最低賃金未満</span>' : ''}</td>
     <td class="av">${(s.avail || []).length ? s.avail.map(x => `<span>${esc(daysText(slotDays(x)))} ${hm(x.start)}–${hm(x.end)}${x.kind === 'sub' ? '<i class="meta">（予備）</i>' : ''}</span>`).join('') : '<span class="warnText">未設定</span>'}</td>
