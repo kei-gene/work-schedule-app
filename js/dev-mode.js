@@ -267,7 +267,7 @@ function traitsOf(s) {   // 人の事情（同じ人は、いつも同じ）
   const parent = !student && age !== null && age >= 28 && age <= 55 && r() < (s.type === 'パート' ? 0.7 : s.type === '社員' ? 0.5 : 0.2);
   return { age, minor, student, parent, jobhunt: student && !minor && age >= 20 && r() < 0.35, boss: !part };
 }
-function randomPrefs(p, mult = 1) {
+function randomPrefs(p, mult = 1, keepRules = false) {
   const keys = pKeys(p), pk = ymd(p.start), open = state.open, close = state.close, N = state.staff.length;
   const window_ = () => { const a = rnd(open, Math.max(open, close - 4)); return { start: hh(a), end: hh(Math.min(close, a + rnd(3, 6))) }; };
   const isWe = k => [0, 6].includes(parseYmd(k).getDay()), wes = keys.filter(isWe), wds = keys.filter(k => !isWe(k));
@@ -279,7 +279,7 @@ function randomPrefs(p, mult = 1) {
   const hol = mult > 0 ? HOLIDAY_SPANS.map(([a, b, nm]) => ({ nm, ks: keys.filter(k => inSpan(k.slice(5), a, b)) })).filter(x => x.ks.length) : [];
   state.staff.forEach(s => {
     const P = pf(s.id), T = traitsOf(s), cms = [];
-    P.dates = {}; P.rules = [];
+    keys.forEach(k => { delete P.dates[k]; }); if (!keepRules) P.rules = [];   // ほかの期間の希望は消さない
     const useDay = (k, v) => { if (P.dates[k]) return false; if (v.status === 'off') { if ((offCount[k] || 0) >= capEv) return false; offCount[k] = (offCount[k] || 0) + 1; } P.dates[k] = v; return true; };
     const put = (ks, v) => ks.reduce((n, k) => n + (useDay(k, v) ? 1 : 0), 0);
     const note = (tag, n, cm) => { if (!n) return; counts[tag] = (counts[tag] || 0) + 1; if (cm) cms.push(cm); };
@@ -304,7 +304,7 @@ function randomPrefs(p, mult = 1) {
       if (!T.student && chance(0.04)) { const k = one(wes); note('qual', put([k], OFF), `${mdText(k)}は資格試験のため、お休みをお願いします。`); }
       if (chance(0.02)) { const ks = win(rnd(1, 2)); note('move', put(ks, OFF), `${rangeTxt(ks)}は引っ越しのため、休みたいです。`); }
     }
-    if (Math.random() < 0.25) P.rules.push(Math.random() < 0.7 ? { target: pick(RULE_TARGETS.slice(2))[0], status: 'off' } : { target: 'holiday', status: 'time', ...window_() });
+    if (!keepRules && Math.random() < 0.25) P.rules.push(Math.random() < 0.7 ? { target: pick(RULE_TARGETS.slice(2))[0], status: 'off' } : { target: 'holiday', status: 'time', ...window_() });
     const offN = pick([0, 0, 0, 1, 1, 2, 2, 3]), timeN = rnd(0, 1);   // ふだんの、ちょっとした希望
     const order = Math.random() < 0.5 ? [...shuffle(wes.slice()), ...shuffle(wds.slice())] : shuffle(keys.slice());   // 休みは週末ぎみ
     let off = 0;
@@ -327,6 +327,7 @@ function renderDev() {
   const kb = Math.round((localStorage.getItem(KEY) || '').length / 102.4) / 10;
   $('#dInfo').textContent = `従業員 ${state.staff.length}人（社員 ${state.staff.filter(s => s.type === '社員').length}・パート ${state.staff.filter(s => s.type === 'パート').length}・アルバイト ${state.staff.filter(s => s.type === 'アルバイト').length}／兼務できる人 ${state.staff.filter(s => skillsOf(s).length > 1).length}人） ／ シフトのある日 ${Object.keys(state.shifts).length}日 ／ 保存データ 約${kb}KB`;
   $('#dReport').textContent = supplyReport();
+  $('#dPeriod').options[0].textContent = `今の期間（${pLabel(curP())}）`; $('#dPeriod').options[1].textContent = `次の期間・次回分（${pLabel(nextP())}）`;
   syncDevCount();
 }
 function syncDevCount() { $('#dCount').disabled = $('#dAuto').checked && $('#dInd').value !== 'generic' && $('#dApply').checked; }
@@ -351,11 +352,14 @@ $('#dRandomStaff').addEventListener('click', async () => {
 });
 $('#dRandomPrefs').addEventListener('click', async () => {
   if (!state.staff.length) return ui.toast('先に従業員を登録してください', 'warn');
-  const p = periodOf(new Date());
-  if (!await ui.ask(`${pLabel(p)} の希望を、全員分ランダムに作り直します。今ある希望と提出は上書きされます。`, { ok: '作る' })) return;
-  const rep = randomPrefs(p, IRR_LEVEL[$('#dIrr').value] ?? 1); save(); renderDev();
-  const list = Object.entries(rep.counts).sort((x, y) => y[1] - x[1]).map(([k, n]) => `${IRR_LABEL[k]} ${n}人`).join('、');
-  $('#dPrefReport').textContent = `イレギュラーな予定：${list || 'なし'}。希望休がいちばん多い日：${rep.peak.n ? `${mdText(rep.peak.k)}（${rep.peak.n}人／全${rep.n}人）` : 'なし'}`;
+  const sel = $('#dPeriod').value, ps = sel === 'both' ? [curP(), nextP()] : sel === 'next' ? [nextP()] : [curP()];
+  if (!await ui.ask(`${ps.map(pLabel).join('\n')}\nの希望を、全員分ランダムに作り直します。今ある希望と提出は上書きされます。`, { ok: '作る' })) return;
+  const lv = IRR_LEVEL[$('#dIrr').value] ?? 1, reps = ps.map((p, i) => randomPrefs(p, lv, i > 0));   // 毎週のルールは、最初の期間でだけ作る
+  save(); renderDev();
+  $('#dPrefReport').textContent = reps.map((rep, i) => {
+    const list = Object.entries(rep.counts).sort((x, y) => y[1] - x[1]).map(([k, n]) => `${IRR_LABEL[k]} ${n}人`).join('、');
+    return `${ps.length > 1 ? (i ? '【次の期間】' : '【今の期間】') : ''}イレギュラーな予定：${list || 'なし'}。希望休がいちばん多い日：${rep.peak.n ? `${mdText(rep.peak.k)}（${rep.peak.n}人／全${rep.n}人）` : 'なし'}`;
+  }).join('\n');
   ui.toast('希望シフトをランダムに作りました。管理者画面のシフト管理で確認できます');
 });
 $('#dLayout').addEventListener('change', () => { state.settings.layout = $('#dLayout').value; save(); applyLayout(); });

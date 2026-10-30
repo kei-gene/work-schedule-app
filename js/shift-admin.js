@@ -149,13 +149,13 @@ const conflictOf = (sh, pref, s, k) => {   // 'req' 希望休の日 / 'out' 希�
 
 /* 表の1マス（PC版） */
 function shiftCell(s, k, pk, compact) {
-  const sh = dayShifts(k)[s.id], pref = adminPref(s.id, k, pk), L = state.settings, attr = `data-id="${s.id}" data-d="${k}"`, c = compact ? ' c' : '';
+  const sh = dayShifts(k)[s.id], pref = adminPref(s.id, k, pk), L = state.settings, attr = `data-id="${s.id}" data-d="${k}"`, c = compact ? ' c' : '', tc = k === todayKey() ? ' tcol' : '';
   if (isWork(sh)) {
     const hrs = shiftHours(sh), over = hrs > L.limitDay, cf = conflictOf(sh, pref, s, k), stn = stationOf(s, sh), swSt = stn !== s.role;
     const title = `${s.name} ${hm(sh.start)}–${hm(sh.end)}（実働${fh(hrs)}時間${sh.brk ? '・休憩' + sh.brk + '分' : ''}${swSt ? '・持ち場：' + stn : ''}）${cf === 'req' ? ' ※希望休の日です' : cf === 'out' ? ' ※希望の時間外です' : ''}`;
     const tag = !cf ? '' : compact ? '<em class="tag">!</em>' : `<em class="tag">${cf === 'req' ? '休希望' : '時間外'}</em>`;
     const body = compact ? `<span>${hm(sh.start)}</span><span>${hm(sh.end)}</span>` : `${hm(sh.start)}–${hm(sh.end)}<small>${fh(hrs)}時間${over ? ' ⚠' : ''}${swSt ? '・' + esc(stn) : ''}</small>`;
-    return { hrs, html: `<td class="scell on${over ? ' over' : ''}${c}" style="background:${roleColor(stn)}" title="${esc(title)}" ${attr}>${body}${tag}</td>` };
+    return { hrs, html: `<td class="scell on${over ? ' over' : ''}${c}${tc}" style="background:${roleColor(stn)}" title="${esc(title)}" ${attr}>${body}${tag}</td>` };
   }
   let cls, lab, title;
   if (!employedOn(s, k)) { cls = 'na'; lab = '—'; title = '入社前、または退職後'; }
@@ -163,7 +163,7 @@ function shiftCell(s, k, pk, compact) {
   else if (sh && sh.off) { cls = 'rest'; lab = '休み'; title = 'こちらで指定した休み'; }
   else if (pref.status === 'time') { cls = 'pf-time'; lab = compact ? `<span>${hm(pref.start)}</span><span>${hm(pref.end)}</span>` : `${hm(pref.start)}–${hm(pref.end)}<small>のみ可</small>`; title = `${hm(pref.start)}〜${hm(pref.end)} なら出勤可能`; }
   else { cls = 'pf-ok'; lab = '○'; title = '未決定（出勤可能）'; }
-  return { hrs: 0, html: `<td class="scell empty ${cls}${c}" title="${esc(s.name + '：' + title)}" ${attr}>${lab}</td>` };
+  return { hrs: 0, html: `<td class="scell empty ${cls}${c}${tc}" title="${esc(s.name + '：' + title)}" ${attr}>${lab}</td>` };
 }
 
 function renderShiftDesktop(keys, pk, el, ro) {
@@ -172,7 +172,7 @@ function renderShiftDesktop(keys, pk, el, ro) {
   const dayCount = Array(keys.length).fill(0), dayCost = Array(keys.length).fill(0), active = keys.some(hasShifts), stat = keys.map(k => dayStat(k));
   const lowAt = i => active && stat[i].lack, anyRule = stat.some(x => x.rule);
   let html = `<table class="gantt shiftgrid${compact ? ' compact' : ''}${ro ? ' ro' : ''}" style="width:100%;min-width:${nameW + keys.length * (compact ? 30 : 64)}px"><colgroup><col style="width:${nameW}px"></colgroup><thead><tr><th class="name">従業員</th>` +
-    keys.map((k, i) => { const d = parseYmd(k), low = lowAt(i); return `<th class="${low ? 'low ' : ''}${k === today ? 'today ' : ''}${d.getDay() === 0 ? 'sun' : d.getDay() === 6 ? 'sat' : ''}" ${low ? ` data-tip="${esc(tipOf(k))}"` : ` title="${mdText(k)}（${DOW[d.getDay()]}）"`}>${compact && i && d.getDate() !== 1 ? d.getDate() : mdText(k)}<small>${compact ? DOW[d.getDay()] : '（' + DOW[d.getDay()] + '）'}</small>${low ? '<i class="warnmark">⚠</i>' : ''}</th>`; }).join('') + '</tr></thead><tbody>';
+    keys.map((k, i) => { const d = parseYmd(k), low = lowAt(i); return `<th class="${low ? 'low ' : ''}${k === today ? 'today ' : ''}${d.getDay() === 0 ? 'sun' : d.getDay() === 6 ? 'sat' : ''}" ${low ? ` data-tip="${esc(tipOf(k))}"` : ` title="${mdText(k)}（${DOW[d.getDay()]}）"`}>${compact && i && d.getDate() !== 1 ? d.getDate() : mdText(k)}<small>${compact ? DOW[d.getDay()] : '（' + DOW[d.getDay()] + '）'}</small>${k === today ? '<i class="todaymark">今日</i>' : ''}${low ? '<i class="warnmark">⚠</i>' : ''}</th>`; }).join('') + '</tr></thead><tbody>';
   shiftStaff(keys, pk).forEach(s => {
     const sb = subOf(s.id, pk); let tot = 0;
     const cells = keys.map((k, i) => {
@@ -188,7 +188,7 @@ function renderShiftDesktop(keys, pk, el, ro) {
   });
   html += '</tbody><tfoot>';
   if (anyRule) html += '<tr class="need"><th class="name">必要人数<small>人数ルール</small></th>' + stat.map(st => `<td>${st.rule ? st.rule.min + (compact ? (st.rule.max == null ? '+' : '-' + st.rule.max) : '〜' + (st.rule.max == null ? '' : st.rule.max)) : '—'}</td>`).join('') + '</tr>';
-  html += '<tr><th class="name">出勤人数</th>' + dayCount.map((n, i) => `<td class="${lowAt(i) ? 'low' : stat[i].over ? 'high' : ''}" ${lowAt(i) ? ` data-tip="${esc(tipOf(keys[i]))}"` : stat[i].over ? ' title="最高人数を超えています"' : ''}>${n}${compact ? '' : '人'}</td>`).join('') + '</tr>';
+  html += '<tr><th class="name">出勤人数</th>' + dayCount.map((n, i) => `<td class="${lowAt(i) ? 'low' : stat[i].over ? 'high' : ''}${keys[i] === today ? ' tcol' : ''}" ${lowAt(i) ? ` data-tip="${esc(tipOf(keys[i]))}"` : stat[i].over ? ' title="最高人数を超えています"' : ''}>${n}${compact ? '' : '人'}</td>`).join('') + '</tr>';
   if (anyWage) html += '<tr><th class="name">人件費</th>' + dayCost.map(c => `<td>${c ? (compact ? Math.round(c / 1000) + 'k' : money(c)) : '—'}</td>`).join('') + '</tr>';
   el.innerHTML = html + '</tfoot></table>';
 }
@@ -201,7 +201,7 @@ function renderShiftMobile(keys, pk) {
   let html = '<div class="mcal">' + DOW_MON.map(d => `<div class="dow">${d}</div>`).join('') + '<div class="mday blank"></div>'.repeat((aP.start.getDay() + 6) % 7);
   keys.forEach(k => {
     const d = parseYmd(k), st = dayStat(k), t = hasShifts(k), wd = d.getDay(), low = active && st.lack;
-    html += `<button type="button" class="mday${k === mDay ? ' sel' : ''}${k === today ? ' today' : ''}${low ? ' low' : ''}${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}" data-k="${k}"${low ? ` data-tip="${esc(tipOf(k))}"` : ''}><b>${d.getDate()}</b><span>${t ? st.n + '人' : '—'}</span>${low ? '<i class="wm">⚠</i>' : ''}</button>`;
+    html += `<button type="button" class="mday${k === mDay ? ' sel' : ''}${k === today ? ' today' : ''}${low ? ' low' : ''}${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}" data-k="${k}"${low ? ` data-tip="${esc(tipOf(k))}"` : ''}><b>${d.getDate()}</b>${k === today ? '<em class="tdm">今日</em>' : ''}<span>${t ? st.n + '人' : '—'}</span>${low ? '<i class="wm">⚠</i>' : ''}</button>`;
   });
   html += '</div>';
   const d = parseYmd(mDay), st = dayStat(mDay), idx = keys.indexOf(mDay), t = hasShifts(mDay), low = active && st.lack;

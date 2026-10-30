@@ -78,7 +78,36 @@ const breakHourList = (sh, idx) => {   // 休憩のマス（最初と最後の�
   const at = Math.min(hrs.length - n - 1, Math.max(1, Math.floor((hrs.length - n) / 2) + [0, 1, -1][idx % 3]));
   return hrs.slice(at, at + n);
 };
-const normW = v => Array.isArray(v) ? { w: v.slice(), b: [] } : { w: [...((v && v.w) || [])], b: [...((v && v.b) || [])] };
+const normW = v => Array.isArray(v) ? { w: v.slice(), b: [], s: {} } : { w: [...((v && v.w) || [])], b: [...((v && v.b) || [])], s: { ...((v && v.s) || {}) } };   // s：{ 時間: 持ち場 }（ふだんの持ち場と違う時間だけ）
+/* ---- 作業表の持ち場（時間ごと）：ふだんは、その日のシフトの持ち場。兼務できる人は、人数が足りない役割へ、途中の時間から別の持ち場に入る ---- */
+const baseStation = (s, date) => stationOf(s, dayShifts(date)[s.id]);
+function stationAt(s, date, h, stn) { const v = stn && stn[s.id] && stn[s.id][h]; return v && skillsOf(s).includes(v) ? v : baseStation(s, date); }
+function deriveStations(date, work) {   // → { 従業員ID: { 時間: 持ち場 } }（ふだんの持ち場と違う時間だけ）
+  const H = hoursList(), staff = state.staff.filter(s => (work[s.id] || []).length), over = {}, prev = {};
+  const mn = r => (state.roleRules[r] && state.roleRules[r].min) || 0, mx = r => { const q = state.roleRules[r]; return q && q.max != null ? q.max : Infinity; };
+  if (!staff.some(s => skillsOf(s).length > 1) || !state.roles.some(r => mn(r.name) > 0 || mx(r.name) < Infinity)) return over;
+  H.forEach(h => {
+    const on = staff.filter(s => work[s.id].includes(h)), st = {}, cnt = {};
+    on.forEach(s => { const p = prev[s.id]; st[s.id] = p && skillsOf(s).includes(p) ? p : baseStation(s, date); cnt[st[s.id]] = (cnt[st[s.id]] || 0) + 1; });   // 前の時間と同じ持ち場から始める（むやみに変えない）
+    const move = (s, to) => { cnt[st[s.id]]--; st[s.id] = to; cnt[to] = (cnt[to] || 0) + 1; };
+    const surplus = r => (cnt[r] || 0) - mn(r);
+    state.roles.forEach(ro => {   // 最低人数に足りない役割へ、ほかの持ち場（余裕のあるところ）から来てもらう。もとの持ち場に戻る人を優先
+      while ((cnt[ro.name] || 0) < mn(ro.name) && (cnt[ro.name] || 0) < mx(ro.name)) {
+        const c = on.filter(s => st[s.id] !== ro.name && skillsOf(s).includes(ro.name) && surplus(st[s.id]) >= 1)
+          .sort((a, b) => (baseStation(b, date) === ro.name) - (baseStation(a, date) === ro.name) || surplus(st[b.id]) - surplus(st[a.id]));
+        if (!c.length) break; move(c[0], ro.name);
+      }
+    });
+    state.roles.forEach(ro => {   // 最高人数を超える役割からは、ほかの持ち場へ
+      while ((cnt[ro.name] || 0) > mx(ro.name)) {
+        const c = on.filter(s => st[s.id] === ro.name).flatMap(s => skillsOf(s).filter(r => r !== ro.name && (cnt[r] || 0) < mx(r)).map(r => ({ s, r })));
+        if (!c.length) break; move(c[0].s, c[0].r);
+      }
+    });
+    on.forEach(s => { prev[s.id] = st[s.id]; if (st[s.id] !== baseStation(s, date)) (over[s.id] = over[s.id] || {})[h] = st[s.id]; });
+  });
+  return over;
+}
 /* シフトから作る。optimize=true のときは、時間帯ごとの最低人数がなるべく保てるように、休憩の位置を調整する */
 function deriveDay(date, optimize) {
   const order = state.staff.filter(s => isWork(dayShifts(date)[s.id])), work = {}, brk = {}, H = hoursList(), cover = {};
@@ -104,20 +133,20 @@ function deriveDay(date, optimize) {
   });
   return { work, brk, order };
 }
-function workDay(date) {   // { work: {ID: [働く時間]}, brk: {ID: [休憩の時間]}, mode }
+function workDay(date) {   // { work: {ID: [働く時間]}, brk: {ID: [休憩の時間]}, mode, stn: {ID: {時間: 持ち場}} }
   const mode = state.workMode[date] || 'shift';
   if (mode === 'manual') {
-    const M = state.work[date] || {}, work = {}, brk = {};
-    Object.keys(M).forEach(id => { const x = normW(M[id]); work[id] = x.w; brk[id] = x.b; });
-    return { work, brk, mode };
+    const M = state.work[date] || {}, work = {}, brk = {}, stn = {};
+    Object.keys(M).forEach(id => { const x = normW(M[id]); work[id] = x.w; brk[id] = x.b; stn[id] = x.s; });
+    return { work, brk, mode, stn };
   }
   const d = deriveDay(date, mode === 'rules');
-  return { work: d.work, brk: d.brk, mode };
+  return { work: d.work, brk: d.brk, mode, stn: deriveStations(date, d.work) };
 }
 const workOf = date => workDay(date).work;
 function materialize(date) {   // 連動している表を、手動で直せる形にする
-  const { work, brk } = workDay(date), M = {};
-  Object.keys(work).forEach(id => { M[id] = { w: work[id].slice(), b: (brk[id] || []).slice() }; });
+  const { work, brk, stn } = workDay(date), M = {};
+  Object.keys(work).forEach(id => { M[id] = { w: work[id].slice(), b: (brk[id] || []).slice(), s: { ...((stn && stn[id]) || {}) } }; });
   state.work[date] = M; state.workMode[date] = 'manual';
 }
 
@@ -138,7 +167,7 @@ function renderHomeShift() {
 
 function renderWork(keep) {
   const H = hoursList(), wrap = $('#gantt'), k = HW(), pk = pkOf(k), [lo, hi] = homeRange(), D = dim(), shiftOn = hasWork(k);
-  const { work, brk, mode } = workDay(k), manual = mode === 'manual';
+  const { work, brk, mode, stn } = workDay(k), manual = mode === 'manual';
   $('#legend').innerHTML = state.roles.map(r => `<span><i style="background:${r.color}"></i>${esc(r.name)}</span>`).join('') +
     '<span><i style="background:#5f6b76"></i>役割なし</span><span><i style="background:#dfe6ec;border:1px solid #bcc8d2"></i>休憩（法定）</span>' + (manual ? '<span><i style="background:#f3faf9;border:1px solid #ccc"></i>勤務可能時間</span>' : '');
   $('#hwLabel').textContent = dayLabel(k); $('#hwPrev').disabled = k <= lo; $('#hwNext').disabled = k >= hi;
@@ -147,8 +176,8 @@ function renderWork(keep) {
   $('#hwMode').textContent = manual ? (drift ? '手動で調整中（シフトと違う部分あり）' : '手動で調整中') : mode === 'rules' ? '人数ルールで自動作成（シフトと連動）' : 'シフトと連動中';
   $('#hwMode').className = 'pill' + (manual ? ' warn' : ' ok');
   $('#hwNote').textContent = manual
-    ? 'マスをクリックすると「働く → 休憩 → なし」の順に切り替わります。「シフト通りに作る」で、シフトの時間どおりに戻せます。'
-    : 'この日のシフトに合わせて自動で作られています（シフトを変えると、この表も変わります）。マスをクリックすると、手動の調整に切り替わります。6時間を超える勤務には、法律で決まっている休憩を「休憩」として入れています。';
+    ? 'マスをクリックすると「働く → 休憩 → なし」の順に切り替わります。右クリック（スマホは長押し）で、役割・休憩・空白を選べます。「シフト通りに作る」で、シフトの時間どおりに戻せます。'
+    : 'この日のシフトに合わせて自動で作られています（シフトを変えると、この表も変わります）。マスをクリックすると、手動の調整に切り替わります。6時間を超える勤務には、法律で決まっている休憩を「休憩」として入れています。兼務できる人は、人数が足りない役割へ、途中の時間から別の持ち場に入ります（右クリック、スマホは長押しで、役割・休憩・空白を選べます）。';
   $('#btnFromShift').disabled = !shiftOn; $('#btnAutoHome').disabled = !shiftOn;
   if (!state.staff.length || (!shiftOn && !manual)) {
     wrap.innerHTML = `<div class="empty">${state.staff.length ? 'この日のシフトがまだありません。シフトを作ると、この表が自動で作られます。手動で作るときは「空にする」を押してください。' : '従業員がまだいません。「従業員」タブから登録してください。'}</div>`;
@@ -159,17 +188,19 @@ function renderWork(keep) {
   let total = 0;
   let html = '<table class="gantt" style="width:' + (D.n + H.length * D.c) + 'px"><colgroup><col style="width:' + D.n + 'px">' + H.map(() => `<col style="width:${D.c}px">`).join('') + '</colgroup><thead><tr><th class="name">従業員</th>' + H.map(h => `<th>${fmt(h)}</th>`).join('') + '</tr></thead><tbody>';
   rows.forEach(s => {
-    const sh = dayShifts(k)[s.id], isW = isWork(sh), stName = stationOf(s, sh), color = roleColor(stName), off = adminPref(s.id, k, pk).status === 'off';
+    const sh = dayShifts(k)[s.id], isW = isWork(sh), off = adminPref(s.id, k, pk).status === 'off', multi = skillsOf(s).length > 1;
     const w = work[s.id] || [], b = brk[s.id] || [], cells = w.length + b.length;
     const win = isW ? shiftHourList(sh) : (shiftOn ? [] : mainHours(s, k)), sub = (!isW && !shiftOn) ? subHours(s, k) : [];
     const hrs = manual ? w.length : (isW ? shiftHours(sh) : 0), cost = (isW && !manual) ? shiftCost(s, sh) : hourly(s) * hrs; total += cost;
     const needBrk = manual && cells > 6 && b.length * 60 < legalBreak(cells);   // 法定の休憩が足りない
-    html += `<tr><th class="name"><b>${esc(s.name)}</b><div class="meta">${esc(s.role || '役割なし')}${stName !== s.role ? '→' + esc(stName) : ''} ／ <span class="stars">${stars(s.rating)}</span></div>
+    const seq = []; [...w].sort((a, c) => a - c).forEach(h => { const x = stationAt(s, k, h, stn); if (seq[seq.length - 1] !== x) seq.push(x); });   // 今日入る持ち場（順番どおり）
+    html += `<tr><th class="name"><b>${esc(s.name)}</b><div class="meta">${esc(s.role || '役割なし')}${seq.length && (seq.length > 1 || seq[0] !== s.role) ? '（今日：' + seq.map(esc).join('→') + '）' : ''} ／ <span class="stars">${stars(s.rating)}</span></div>
       <div class="meta${off || needBrk ? ' warnText' : ''}">${isW ? hm(sh.start) + '–' + hm(sh.end) + '・' : ''}${fh(hrs)}時間${isW && sh.brk ? '・休憩' + sh.brk + '分' : ''}・${money(cost)}${off ? '・希望休' : ''}${needBrk ? '・⚠休憩が足りません' : ''}</div></th>`;
     H.forEach(h => {
       const on = w.includes(h), br = b.includes(h);
       const cls = on || br ? (br ? 'brk' : 'on') : win.includes(h) ? 'ok' : sub.includes(h) ? 'sub' : 'off';
-      html += `<td class="cell ${cls}${manual ? '' : ' view'}" data-id="${s.id}" data-h="${h}"${on ? ` style="background:${color}"` : ''}>${on ? '●' : br ? '休憩' : ''}</td>`;
+      const stH = on ? stationAt(s, k, h, stn) : '';
+      html += `<td class="cell ${cls}" data-id="${s.id}" data-h="${h}"${on ? ` style="background:${roleColor(stH)}" title="${esc(stH || '役割なし')}"` : ''}>${on ? (multi ? esc(stH.slice(0, 4)) : '●') : br ? '休憩' : ''}</td>`;
     });
     html += '</tr>';
   });
@@ -180,7 +211,7 @@ function renderWork(keep) {
     const q = state.roleRules[ro.name];
     if (!q || (!q.min && q.max == null)) return;
     html += `<tr><th class="name"><span style="color:${ro.color}">●</span> ${esc(ro.name)}の人数<small>${q.min}〜${q.max == null ? '制限なし' : q.max}</small></th>`;
-    H.forEach(h => { const c = rows.filter(s => stationOf(s, dayShifts(k)[s.id]) === ro.name && (work[s.id] || []).includes(h)).length; html += `<td class="${c < q.min ? 'low' : q.max != null && c > q.max ? 'high' : ''}">${c}</td>`; });
+    H.forEach(h => { const c = rows.filter(s => (work[s.id] || []).includes(h) && stationAt(s, k, h, stn) === ro.name).length; html += `<td class="${c < q.min ? 'low' : q.max != null && c > q.max ? 'high' : ''}">${c}</td>`; });
     html += '</tr>';
   });
   wrap.innerHTML = html + '</tfoot></table>';
@@ -205,11 +236,50 @@ $('#gantt').addEventListener('click', async e => {
       !await ui.ask('勤務可能時間の外のマスです。\nこの時間に勤務を入れますか？', { ok: '入れる' })) return;
   if ((state.workMode[k] || 'shift') !== 'manual') { materialize(k); ui.toast('手動の調整に切り替えました。「シフト通りに作る」で、シフトの時間どおりに戻せます', 'warn'); }
   const M = state.work[k] || (state.work[k] = {}), x = normW(M[id]);
-  if (x.w.includes(h)) { x.w.splice(x.w.indexOf(h), 1); x.b.push(h); }        // 働く → 休憩
+  if (x.w.includes(h)) { x.w.splice(x.w.indexOf(h), 1); x.b.push(h); delete x.s[h]; }        // 働く → 休憩
   else if (x.b.includes(h)) x.b.splice(x.b.indexOf(h), 1);                   // 休憩 → なし
   else x.w.push(h);                                                          // なし → 働く
   M[id] = x; save(); renderGantt(true);
 });
+/* 右クリック（スマホは長押し）：役割の変更・休憩・空白を選ぶ */
+const cmEl = document.createElement('div'); cmEl.id = 'cmenu'; cmEl.hidden = true; document.body.append(cmEl);
+const hideCm = () => { cmEl.hidden = true; cmEl.innerHTML = ''; };
+async function setWorkCell(k, id, h, kind, station, td) {   // kind：'work'（働く。station＝入る持ち場）／'break'（休憩）／'none'（空白）
+  const s = state.staff.find(v => v.id === id); if (!s) return;
+  if (kind !== 'none' && td && td.classList.contains('off') && !await ui.ask('勤務可能時間の外のマスです。\nこの時間に勤務を入れますか？', { ok: '入れる' })) return;
+  if ((state.workMode[k] || 'shift') !== 'manual') { materialize(k); ui.toast('手動の調整に切り替えました。「シフト通りに作る」で、シフトの時間どおりに戻せます', 'warn'); }
+  const M = state.work[k] || (state.work[k] = {}), x = normW(M[id]);
+  x.w = x.w.filter(v => v !== h); x.b = x.b.filter(v => v !== h); delete x.s[h];
+  if (kind === 'work') { x.w.push(h); if (station !== baseStation(s, k)) x.s[h] = station; }
+  else if (kind === 'break') x.b.push(h);
+  M[id] = x; save(); renderGantt(true);
+}
+function openCm(td, px, py) {
+  const k = HW(), id = td.dataset.id, h = +td.dataset.h, s = state.staff.find(v => v.id === id); if (!s) return;
+  const { work, brk, stn } = workDay(k), w = (work[id] || []).includes(h), b = (brk[id] || []).includes(h), cur = w ? stationAt(s, k, h, stn) : null, sk = skillsOf(s), roles = sk.length ? sk : [''];
+  const item = (act, label, on, color) => `<button type="button" data-cm="${esc(act)}"${on ? ' class="on"' : ''}>${color ? `<i style="background:${color}"></i>` : ''}${esc(label)}${on ? '<b>✓</b>' : ''}</button>`;
+  cmEl.dataset.id = id; cmEl.dataset.h = h;
+  cmEl.innerHTML = `<div class="cm-head">${esc(s.name)}　${fmt(h)}〜${fmt(h + 1)}</div><div class="cm-title">役割（この時間に働く）</div>` +
+    roles.map(r => item('w:' + r, r || '勤務（役割なし）', w && cur === r, roleColor(r))).join('') +
+    '<hr>' + item('break', '休憩', b) + item('none', '空白（なし）', !w && !b);
+  cmEl.hidden = false;
+  const W = cmEl.offsetWidth, Hh = cmEl.offsetHeight;
+  cmEl.style.left = Math.max(6, Math.min(px, window.innerWidth - W - 6)) + 'px'; cmEl.style.top = Math.max(6, Math.min(py, window.innerHeight - Hh - 6)) + 'px';
+}
+$('#gantt').addEventListener('contextmenu', e => { const td = e.target.closest('.cell[data-id]'); if (!td) return; e.preventDefault(); openCm(td, e.clientX, e.clientY); });
+cmEl.addEventListener('click', async e => {
+  const b = e.target.closest('[data-cm]'); if (!b) return;
+  const id = cmEl.dataset.id, h = +cmEl.dataset.h, a = b.dataset.cm, td = document.querySelector(`#gantt .cell[data-id="${id}"][data-h="${h}"]`);
+  hideCm();
+  await setWorkCell(HW(), id, h, a.startsWith('w:') ? 'work' : a === 'break' ? 'break' : 'none', a.startsWith('w:') ? a.slice(2) : '', td);
+});
+document.addEventListener('mousedown', e => { if (!cmEl.hidden && !e.target.closest('#cmenu')) hideCm(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') hideCm(); });
+window.addEventListener('scroll', hideCm, true); window.addEventListener('resize', hideCm);
+let lpT = null, lpFired = false;   // スマホ：長押しでメニュー
+$('#gantt').addEventListener('touchstart', e => { const td = e.target.closest('.cell[data-id]'); if (!td || e.touches.length !== 1) return; lpFired = false; const t = e.touches[0]; lpT = setTimeout(() => { lpFired = true; openCm(td, t.clientX, t.clientY); }, 550); }, { passive: true });
+['touchmove', 'touchcancel'].forEach(ev => $('#gantt').addEventListener(ev, () => clearTimeout(lpT), { passive: true }));
+$('#gantt').addEventListener('touchend', e => { clearTimeout(lpT); if (lpFired) { e.preventDefault(); lpFired = false; } });
 $('#btnFromShift').addEventListener('click', async () => {
   const k = HW();
   if (!hasWork(k)) return ui.toast('この日のシフトがまだありません。先にシフト管理で作成してください', 'warn');
@@ -221,9 +291,10 @@ $('#btnAutoHome').addEventListener('click', async () => {
   if (!hasWork(k)) return ui.toast('この日のシフトがまだありません。先にシフト管理で作成してください', 'warn');
   if ((state.workMode[k] || 'shift') === 'manual' && !await ui.ask(`${mdText(k)} の手動の調整を消して、人数ルールで自動作成します。`, { ok: '自動作成する' })) return;
   state.workMode[k] = 'rules'; delete state.work[k]; save(); renderGantt();
-  const { work } = workDay(k), low = hoursList().filter(h => Object.values(work).filter(a => a.includes(h)).length < rule(h).min);
-  if (low.length) ui.toast(`シフトの時間どおりに作りました。${low.map(fmt).join('、')} は最低人数に届いていません（シフトの人数が足りません）`, 'warn');
-  else ui.toast('シフトの時間どおりに作り、休憩を最低人数が保てる位置に置きました');
+  const { work, stn } = workDay(k), low = hoursList().filter(h => Object.values(work).filter(a => a.includes(h)).length < rule(h).min);
+  const mv = Object.values(stn).reduce((n, m) => n + Object.keys(m).length, 0), mvTxt = mv ? `　兼務できる人が、人数が足りない役割へ入れ替わった時間が${mv}か所あります。` : '';
+  if (low.length) ui.toast(`シフトの時間どおりに作りました。${low.map(fmt).join('、')} は最低人数に届いていません（シフトの人数が足りません）` + mvTxt, 'warn');
+  else ui.toast('シフトの時間どおりに作り、休憩を最低人数が保てる位置に置きました' + mvTxt);
 });
 $('#btnClear').addEventListener('click', async () => {
   const k = HW();

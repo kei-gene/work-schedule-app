@@ -240,8 +240,11 @@
 
       <div class="card">
         <h2>ランダムな希望シフトを作る</h2>
-        <p class="meta">登録済みの全員について、今の期間の「希望休」「時間指定」「毎週のルール」「コメント」をランダムに作り、一部の人は提出済みにします。今ある希望と提出は上書きされます。</p>
+        <p class="meta">登録済みの全員について、選んだ期間の「希望休」「時間指定」「毎週のルール」「コメント」をランダムに作り、一部の人は提出済みにします。今ある希望と提出は上書きされます。</p>
         <p class="meta">ふだんの小さな希望に加えて、暮らしの事情による「イレギュラーな予定」も入ります（旅行・帰省、連休、子どもの運動会や面談、学生のテスト期間、就職活動、通院、冠婚葬祭など）。学生・子育て中などの人の事情ごとに、起きやすい予定が変わります。全員が休む日は作りません。</p>
+        <label>作る期間
+          <select id="dPeriod"><option value="cur">今の期間</option><option value="next">次の期間（次回分）</option><option value="both">今の期間と、次の期間の両方</option></select>
+        </label>
         <label>イレギュラーな予定の多さ
           <select id="dIrr"><option value="none">なし（ふだんの希望だけ）</option><option value="low">少なめ</option><option value="mid" selected>標準</option><option value="high">多め（繁忙・連休の時期など）</option></select>
         </label>

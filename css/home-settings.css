@@ -78,3 +78,27 @@ li.ref{color:var(--sub);font-size:12px}
 li.ref .lk{color:var(--sub);border-color:var(--line);font-weight:400}
 .lackline .meta{margin:6px 0 0;font-weight:400;font-size:12px;color:var(--sub)}
 .mshort ul{margin:0;padding-left:18px}
+
+/* ---- 今日の強調 ---- */
+.shiftgrid thead th.today{background:var(--accent);color:#fff}
+.shiftgrid thead th.today.low{background:#fde8e1;color:#b3261e;outline:3px solid var(--accent);outline-offset:-3px}
+.todaymark{display:block;width:max-content;margin:2px auto 0;padding:0 5px;border-radius:3px;background:#f2b84b;color:#3b2a00;font-style:normal;font-size:10px;font-weight:700;line-height:1.4}
+.shiftgrid td.tcol{box-shadow:inset 2px 0 0 var(--accent),inset -2px 0 0 var(--accent)}
+.shiftgrid tfoot td.tcol{background-image:linear-gradient(rgba(15,110,110,.1),rgba(15,110,110,.1))}
+.mday.today{background:#e0f0ee;border:2px solid var(--accent)}
+.mday .tdm{font-style:normal;font-size:9px;line-height:1.3;background:var(--accent);color:#fff;border-radius:3px;padding:0 4px;font-weight:700}
+.mday.sel .tdm{background:#fff;color:var(--accent-d)}
+.cday.today{box-shadow:inset 0 0 0 2px var(--accent)}
+/* ---- 作業表：右クリックのメニュー ---- */
+#cmenu{position:fixed;z-index:60;min-width:200px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.25);padding:6px;font-size:13px}
+#cmenu[hidden]{display:none}
+#cmenu .cm-head{padding:4px 10px 6px;font-weight:700;border-bottom:1px solid var(--line);margin-bottom:4px}
+#cmenu .cm-title{padding:4px 10px 2px;font-size:11px;color:var(--sub)}
+#cmenu button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:0;background:transparent;padding:8px 10px;border-radius:6px;font:inherit;cursor:pointer;color:var(--ink)}
+#cmenu button:hover{background:#e6f2f1}
+#cmenu button.on{font-weight:700}
+#cmenu button i{width:12px;height:12px;border-radius:3px;flex:none}
+#cmenu button b{margin-left:auto;color:var(--accent)}
+#cmenu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+#gantt .cell{user-select:none;-webkit-touch-callout:none}
+#dPrefReport{white-space:pre-line}
