@@ -26,7 +26,7 @@ function openShift(id, date) {
   const s = state.staff.find(x => x.id === id), cur = dayShifts(date)[id], pref = adminPref(id, date, pkOf(date)), work = isWork(cur);
   editShift = { id, date };
   $('#sTitle').textContent = `${s.name}　${date.replace(/-/g, '/')}（${DOW[parseYmd(date).getDay()]}）`;
-  $('#sHint').textContent = `出勤できる曜日・時間：${availText(s)}` + (cur && cur.off ? '　【今は「休み」に指定中】' : '');
+  $('#sHint').textContent = `勤務可能曜日・時間：${availText(s)}` + (cur && cur.off ? '　【今は「休み」に指定中】' : '');
   $('#sPref').textContent = '本人の希望：' + prefText(pref);
   $('#sFillSub').hidden = !slotFor(s, date, 'sub');
   const sk = skillsOf(s); $('#sStWrap').hidden = sk.length < 2;   // 兼務できる人だけ、その日に入る持ち場を選べる
@@ -46,7 +46,7 @@ async function activateCell(id, k) {
 $('#wGrid').addEventListener('click', e => { const td = e.target.closest('.scell'); if (td) activateCell(td.dataset.id, td.dataset.d); });
 const fillShift = (a, b) => { setT('sStart', a); setT('sEnd', b); setBreak(legalBreak((tmin(b) - tmin(a)) / 60)); updateShiftInfo(); };
 const slotFor = (s, date, kind) => (s.avail || []).find(x => (kind === 'sub' ? x.kind === 'sub' : x.kind !== 'sub') && slotDays(x).includes(parseYmd(date).getDay()));
-$('#sFillMain').addEventListener('click', () => { const s = state.staff.find(x => x.id === editShift.id), sl = slotFor(s, editShift.date, 'main'); if (!sl) return ui.toast('この曜日に出勤できる時間が登録されていません', 'warn'); fillShift(sl.start, sl.end); });
+$('#sFillMain').addEventListener('click', () => { const s = state.staff.find(x => x.id === editShift.id), sl = slotFor(s, editShift.date, 'main'); if (!sl) return ui.toast('この曜日に勤務可能時間が登録されていません', 'warn'); fillShift(sl.start, sl.end); });
 $('#sFillSub').addEventListener('click', () => { const s = state.staff.find(x => x.id === editShift.id), sl = slotFor(s, editShift.date, 'sub'); if (sl) fillShift(sl.start, sl.end); });
 ['click', 'input', 'change', 'focusout'].forEach(ev => shiftEl.addEventListener(ev, () => editShift && updateShiftInfo()));
 $('#sCancel').addEventListener('click', closeShift);

@@ -114,7 +114,7 @@ function pickPersona(sp, hc, t) {   // hc：人が足りない時間、t：'wd'�
   const day = t === 'wd' && hc < 17, night = sp.win === 'night' || hc >= 21;
   return mk(night ? wpick([['uni', 40], ['free', 40], ['wife', 10]]) : day ? wpick([['wife', 55], ['senior', 15], ['free', 20], ['uni', 10]]) : t === 'wd' ? wpick([['uni', 40], ['hs', 12], ['free', 20], ['wife', 28]]) : wpick([['uni', 38], ['hs', 10], ['free', 22], ['wife', 22], ['senior', 8]]));
 }
-/* 1人分：出勤できる曜日と時間（複数の時間帯・予備つき）、時給（多くの人は最低賃金のまま）を作る */
+/* 1人分：勤務可能曜日・時間（複数の時間帯・予備つき）、時給（多くの人は最低賃金のまま）を作る */
 function buildStaff(sp, st, en, isBoss, used, idx, days, per) {
   per = per || pickPersona(sp, st, undefined);
   const open = state.open, close = state.close, min = state.settings.minWage;
@@ -212,7 +212,7 @@ function supplyReport() {
   });
   const f = (t, n) => `${n}：最低${res[t].worst.toFixed(1)}倍（${res[t].worstH}時台）・平均${res[t].avg.toFixed(1)}倍`;
   const weak = [...res.wd.weak.map(h => '平日' + h + '時台'), ...res.we.weak.map(h => '休日' + h + '時台')];
-  return `人員の充足度（出勤できる人数 × 出勤率64% ÷ 必要人数）　${f('wd', '平日')}／${f('we', '休日')}。` + (weak.length ? `⚠ ${weak.slice(0, 8).join('、')}${weak.length > 8 ? '…' : ''}は、必要人数を満たせない見込みです。` : '全時間帯で、必要人数を満たせる見込みです。');
+  return `人員の充足度（勤務可能な人数 × 出勤率64% ÷ 必要人数）　${f('wd', '平日')}／${f('we', '休日')}。` + (weak.length ? `⚠ ${weak.slice(0, 8).join('、')}${weak.length > 8 ? '…' : ''}は、必要人数を満たせない見込みです。` : '全時間帯で、必要人数を満たせる見込みです。');
 }
 
 /* 人数を決めて作る（業態の「必要人数から自動」をオフにしたとき） */

@@ -25,7 +25,7 @@ function parseAvail(str) {
   });
   return { avail, errs };
 }
-/* 1行1人：名前, 役割, 評価, 時給（空欄なら最低賃金）, 出勤できる曜日と時間。タブ区切り（表計算ソフトからの貼り付け）またはカンマ区切り */
+/* 1行1人：名前, 役割, 評価, 時給（空欄なら最低賃金）, 勤務可能曜日・時間。タブ区切り（表計算ソフトからの貼り付け）またはカンマ区切り */
 function parseBulk(text, addRoles) {
   const rows = [], errs = [];
   text.split(/\r?\n/).forEach((line, i) => {
@@ -42,7 +42,7 @@ function parseBulk(text, addRoles) {
     if (!(wage >= 0)) bad.push('時給は数字で入力してください');
     else if (wage > 0 && cur === 'JPY' && wage < state.settings.minWage) bad.push(`時給が最低賃金（${state.settings.minWage}円）を下回っています`);
     const { avail, errs: ae } = parseAvail(av);
-    if (!av.trim()) bad.push('出勤できる曜日と時間がありません');
+    if (!av.trim()) bad.push('勤務可能曜日・時間がありません');
     bad.push(...ae);
     if (role && !addRoles && !state.roles.some(r => r.name === role)) bad.push(`役割「${role}」は登録されていません`);
     if (bad.length) errs.push(`${i + 1}行目：${bad.join('、')}`);

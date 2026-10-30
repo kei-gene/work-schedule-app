@@ -130,7 +130,7 @@
       <span class="legend-note">マスをクリックして入力</span>
     </div>
     <p id="wTotal" class="total"></p>
-    <p id="wLack" class="lackline" hidden></p>
+    <div id="wLack" class="lackline" hidden></div>
     <div id="wGrid" class="gantt-wrap"></div>
     <div id="wMobile" class="mshift" hidden></div>
     <div id="wReq" class="card reqpanel"></div>
@@ -184,7 +184,7 @@
             <div class="actions"><button type="button" class="btn" id="eRuleAdd">ルールを追加</button></div>
           </div>
           <div class="card" id="reqCard">
-            <h2>出勤できる曜日・時間</h2>
+            <h2>勤務可能曜日・時間</h2>
             <p id="reqCur" class="meta"></p>
             <div class="actions"><button type="button" class="btn primary" id="reqOpen">変更を申請する</button></div>
             <ul id="reqList" class="staff-list"></ul>
@@ -436,7 +436,7 @@
           <label>勤務時間の公平さ<select id="aFair"></select></label>
         </div>
         <label>余裕のある時間帯の人数<select id="aFill"></select></label>
-        <label>出勤できる時間の使い方<select id="aTarget"></select></label>
+        <label>勤務可能時間の使い方<select id="aTarget"></select></label>
         <label>予備の出退勤時間<select id="aSub"></select></label>
         <label>人手が足りないときの対応<select id="aFix"></select></label>
       </div>
@@ -559,7 +559,7 @@
         <label>週の出勤日数・希望（最大）<input type="number" id="fDpwMax" min="0" max="7" step="1" placeholder="初期値を使う"></label>
       </div>
       <p class="meta">生年月日を入れると、18歳未満の人は、22時〜翌5時に自動で入れません。入社日より前・退職日より後には入れません。上限は、扶養や社会保険の基準などで働き方を抑えたい人に使います（基準の数字は各自の状況で違うため、管理者が決めてください）。自動作成で守り、手動で超えると警告が出ます。</p>
-      <div class="field">出勤できる曜日と時間
+      <div class="field">勤務可能曜日・時間
         <div id="fSlots" class="slots"></div>
         <button type="button" class="btn small" id="fSlotAdd">＋ 追加</button>
         <p class="meta">曜日を選んで、時間を入れます。曜日や時間帯が違うときは「＋ 追加」で増やせます。「予備」は、人手が足りないときだけ使う時間です。</p>
@@ -584,7 +584,7 @@
 
 <div id="reqModal" class="modal" hidden>
   <div class="dialog wide pop" role="dialog" aria-modal="true" aria-labelledby="reqTitle">
-    <h2 id="reqTitle">出勤できる曜日・時間の変更申請</h2>
+    <h2 id="reqTitle">勤務可能曜日・時間の変更申請</h2>
     <div id="rSlots" class="slots"></div>
     <button type="button" class="btn small" id="rSlotAdd">＋ 追加</button>
     <div class="row2">
@@ -644,8 +644,8 @@
   <div class="dialog wide" role="dialog" aria-modal="true" aria-labelledby="bulkTitle">
     <h2 id="bulkTitle">従業員を一括登録</h2>
     <p class="meta">Excel やスプレッドシートからコピーして貼り付けるか、CSV ファイルを選んでください。1行に1人で、列は次の順です。同じ名前の従業員は上書きされます。</p>
-    <code>名前, 役割, 評価(1〜5), 時給（空欄なら最低賃金）, 出勤できる曜日と時間</code>
-    <p class="meta">出勤できる曜日と時間は「月火水木金 9:00-15:00; 土日 12:00-18:00」のように書きます（「;」で区切ると、時間帯をいくつでも書けます。「毎日」「平日」「週末」も使えます。後ろに「（予備）」を付けると予備の時間）。時給は、空欄なら最低賃金になります。</p>
+    <code>名前, 役割, 評価(1〜5), 時給（空欄なら最低賃金）, 勤務可能曜日・時間</code>
+    <p class="meta">勤務可能曜日・時間は「月火水木金 9:00-15:00; 土日 12:00-18:00」のように書きます（「;」で区切ると、時間帯をいくつでも書けます。「毎日」「平日」「週末」も使えます。後ろに「（予備）」を付けると予備の時間）。時給は、空欄なら最低賃金になります。</p>
     <textarea id="bulkText" rows="9" spellcheck="false" placeholder="田中太郎,レジ,4,,月火水木金 9:00-15:00; 土日 12:00-18:00"></textarea>
     <div class="bulk-tools">
       <input type="file" id="bulkFile" accept=".csv,.tsv,.txt">

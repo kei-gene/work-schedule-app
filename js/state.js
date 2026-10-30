@@ -7,7 +7,7 @@ const DEF_ROLES = [['レジ', '#0f6e6e'], ['接客', '#3b6fb6'], ['品出し', '
 /* 自動作成のルール（プリセット）。数値は 0=オフ 1=弱 2=標準 3=強 */
 const PRESETS = {
   balance:   { label: 'バランス重視', desc: '人手不足を作らないことを最優先にします。希望休と、希望時間の外には入れません。希望した人を全員入れる必要はなく、最低人数と最高人数の間で、従業員間の勤務日数・時間をなるべく揃えながらバランスよく組みます。足りないときは、予備の時間や休みの日をゆるめて補います。迷ったらこれがおすすめです。', v: { rating: 2, contig: 2, wage: 1, fair: 3, fill: 'mid', target: 'cap', sub: 'fallback', fix: 'flex' } },
-  headcount: { label: '人数重視', desc: '出勤できる時間の長さにこだわらず、各時間帯を最高人数に近づけます。繁忙期や人手不足の日向けです。', v: { rating: 1, contig: 1, wage: 0, fair: 1, fill: 'max', target: 'ignore', sub: 'always', fix: 'flex' } },
+  headcount: { label: '人数重視', desc: '勤務可能時間の長さにこだわらず、各時間帯を最高人数に近づけます。繁忙期や人手不足の日向けです。', v: { rating: 1, contig: 1, wage: 0, fair: 1, fill: 'max', target: 'ignore', sub: 'always', fix: 'flex' } },
   cost:      { label: '人件費重視', desc: '最低人数だけを満たし、時給の安い従業員を優先します。予備の時間は使いません。', v: { rating: 1, contig: 2, wage: 3, fair: 0, fill: 'min', target: 'cap', sub: 'never', fix: 'off' } },
   quality:   { label: '評価重視', desc: '評価の高い従業員を優先して配置します。忙しい時間帯の品質を上げたいときに。', v: { rating: 3, contig: 2, wage: 0, fair: 0, fill: 'mid', target: 'fill', sub: 'fallback', fix: 'flex' } },
   fair:      { label: '公平重視', desc: '従業員間の勤務時間をなるべく揃えます。希望時間を超えては入れません。', v: { rating: 1, contig: 2, wage: 1, fair: 3, fill: 'mid', target: 'cap', sub: 'fallback', fix: 'off' } },
@@ -47,7 +47,7 @@ function load() {
   if (s.settings.maxStreak === undefined) s.settings.maxStreak = 6;
   if (!s.settings.minWage) { s.settings.minWage = 1231; s.settings.minWageArea = '大阪府'; }
   if (!s.settings.night) s.settings.night = { start: 22, end: 5, pct: 25, plus: 0 };   // 深夜の割増（時間帯・％・加算の円は、管理者が変えられる）
-  s.requests = s.requests || [];   // 出勤できる曜日・時間の変更申請 [{ id, staffId, at, avail, dpw, note, status, reply }]
+  s.requests = s.requests || [];   // 勤務可能曜日・時間の変更申請 [{ id, staffId, at, avail, dpw, note, status, reply }]
   if (!s.settings.auto2) s.settings.auto2 = { restMax: 2, interval: 9, dpw: { min: 3, max: 5 }, leadMin: 1, secs: 2, flex: true };   // 自動作成の条件
   s.patterns = s.patterns || [];   // シフトの型 [{ id, name, start, end, days }]
   if (!s.settings.submit) s.settings.submit = { mode: 'next' };   // 従業員が希望を出せる期間：'next' 次回分だけ ／ 'cur_next' 今の期間と次回分 ／ 'open' 今の期間以降すべて
@@ -115,7 +115,7 @@ function span(a, b) {
   for (let h = x; h < y; h++) r.push(h);
   return r;
 }
-/* 出勤できる曜日と時間：s.avail = [{ days:[曜日0〜6], start, end, kind:'main'（希望）|'sub'（予備） }, ...]。日付を渡すと、その曜日の分だけ */
+/* 勤務可能曜日・時間：s.avail = [{ days:[曜日0〜6], start, end, kind:'main'（希望）|'sub'（予備） }, ...]。日付を渡すと、その曜日の分だけ */
 const slotDays = x => x.days || [0, 1, 2, 3, 4, 5, 6];
 const slotHours = x => span(x.start, x.end);
 const availOn = (s, k) => (s.avail || []).filter(x => k == null || slotDays(x).includes(parseYmd(k).getDay()));

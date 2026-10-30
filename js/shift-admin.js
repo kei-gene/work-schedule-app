@@ -94,11 +94,13 @@ function renderRuleNote(keys) {
 }
 $('#wRuleNote').addEventListener('click', e => { if (e.target.dataset.go) { setCat = 'shift'; switchTab('settings'); } });
 function renderLackLine(keys) {
-  const el = $('#wLack'), active = keys.some(hasShifts);
-  const lack = active ? keys.filter(k => dayStat(k).lack) : [];
+  const el = $('#wLack'), active = keys.some(hasShifts), lack = active ? keys.filter(k => dayStat(k).lack) : [];
   el.hidden = !lack.length;
-  el.innerHTML = lack.length ? `⚠ 人数が足りない日が${lack.length}日あります（日付にカーソルを当てる、またはタップすると、どこが足りないかが見られます）<br>` +
-    lack.slice(0, 14).map(k => `<span class="tipchip" data-tip="${esc(tipOf(k))}">${mdText(k)}</span>`).join('') + (lack.length > 14 ? `…ほか${lack.length - 14}日` : '') : '';
+  if (!lack.length) { el.innerHTML = ''; return; }
+  const dn = k => `${mdText(k)}（${DOW[parseYmd(k).getDay()]}）`;
+  el.innerHTML = `<details${lack.length <= 5 ? ' open' : ''}><summary>⚠ 人数が足りない日が${lack.length}日あります<small>（クリックで開く・閉じる）</small></summary><ul class="lacklist">` +
+    lack.slice(0, 14).map(k => `<li><b>${dn(k)}</b><ul>${shortItems(k).map(it => shortLi(it, false)).join('')}</ul></li>`).join('') + '</ul>' +
+    (lack.length > 14 ? `<p class="meta">…ほか${lack.length - 14}日</p>` : '') + '<p class="meta">くわしい内訳は、表の日付（赤い日）にカーソルを当てる（スマホはタップ）か、「作成結果」で見られます。</p></details>';
 }
 
 function dayCover(k) {   // その日の、時間ごとの配置人数
@@ -112,18 +114,24 @@ function dayCover(k) {   // その日の、時間ごとの配置人数
   });
   return { n, cnt, roleAt, H };
 }
-/* 人数が足りない日の、「どこが・どれだけ」足りないかの説明（カーソルを当てると見られる） */
-function shortDetail(k) {
+/* 人数が足りない日の、「どこが・どれだけ」足りないかを、項目ごとに分ける（一覧・カーソルを当てたとき・スマホ・作成結果で使う） */
+function shortItems(k) {
   const c = dayCover(k), H = c.H, dr = dayRuleOf(k), L = [];
   const rng = hs => { const out = []; let a = null, b = null; hs.forEach(h => { if (a === null) a = b = h; else if (h === b + 1) b = h; else { out.push([a, b]); a = b = h; } }); if (a !== null) out.push([a, b]); return out.map(([x, y]) => x === y ? `${x}時台` : `${x}〜${y}時台`).join('、'); };
   const hs = H.filter(h => c.cnt[h] < rule(h).min);
-  if (hs.length) { L.push(`時間帯の人数が足りません：${rng(hs)}`); hs.slice(0, 6).forEach(h => L.push(`・${h}時台：${c.cnt[h]}人（最低${rule(h).min}人）→ あと${rule(h).min - c.cnt[h]}人`)); if (hs.length > 6) L.push(`…ほか${hs.length - 6}時間`); }
-  if (dr && c.n < dr.min) L.push(`1日の出勤人数：${c.n}人（最低${dr.min}人）→ あと${dr.min - c.n}人`);
-  state.roles.forEach(ro => { const q = state.roleRules[ro.name]; if (!q || !q.min) return; const low = H.filter(h => (c.roleAt[h][ro.name] || 0) < q.min); if (low.length) L.push(`役割「${ro.name}」が足りません：${rng(low)}（最低${q.min}人）`); });
+  if (hs.length) L.push({ kind: 'hour', label: '時間帯の人数', text: `${rng(hs)}（最大あと${Math.max(...hs.map(h => rule(h).min - c.cnt[h]))}人）`, sub: hs.slice(0, 6).map(h => `${h}時台：${c.cnt[h]}人（最低${rule(h).min}人）→ あと${rule(h).min - c.cnt[h]}人`).concat(hs.length > 6 ? [`…ほか${hs.length - 6}時間`] : []) });
+  if (dr && c.n < dr.min) L.push({ kind: 'day', label: '1日の出勤人数', text: `${c.n}人（最低${dr.min}人）→ あと${dr.min - c.n}人` });
+  state.roles.forEach(ro => { const q = state.roleRules[ro.name]; if (!q || !q.min) return; const low = H.filter(h => (c.roleAt[h][ro.name] || 0) < q.min); if (low.length) L.push({ kind: 'role', label: `役割「${ro.name}」`, text: `${rng(low)}が足りません（最低${q.min}人）` }); });
   const A = state.settings.auto2, leads = state.roles.filter(r => r.lead).map(r => r.name);
-  if (A.leadMin > 0 && leads.length) { const low = H.filter(h => leads.reduce((n, nm) => n + (c.roleAt[h][nm] || 0), 0) < A.leadMin); if (low.length) L.push(`（参考）責任者がいない時間：${rng(low)}`); }
+  if (A.leadMin > 0 && leads.length) { const low = H.filter(h => leads.reduce((n, nm) => n + (c.roleAt[h][nm] || 0), 0) < A.leadMin); if (low.length) L.push({ kind: 'lead', label: '責任者', text: `いない時間：${rng(low)}`, ref: true }); }
   return L;
 }
+function shortDetail(k) {   // カーソルを当てたときの説明（1行ずつ）
+  const out = []; shortItems(k).forEach(it => { out.push(`${it.ref ? '（参考）' : ''}${it.label}：${it.text}`); (it.sub || []).forEach(x => out.push('・' + x)); });
+  return out;
+}
+/* 項目を箇条書き（<li>）にする */
+const shortLi = (it, sub = true) => `<li${it.ref ? ' class="ref"' : ''}><span class="lk">${esc(it.label)}</span>${esc(it.text)}${sub && it.sub ? `<ul>${it.sub.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</li>`;
 const tipOf = k => { const d = parseYmd(k); return `${d.getMonth() + 1}/${d.getDate()}（${DOW[d.getDay()]}）：人数が足りません\n` + shortDetail(k).join('\n'); };
 
 function dayStat(k) {   // lack = 人数が足りない（1日の人数ルール、または時間帯ごとの最低人数）
@@ -201,7 +209,7 @@ function renderShiftMobile(keys, pk) {
     `<button type="button" class="btn small" data-mnav="1"${idx === keys.length - 1 ? ' disabled' : ''} aria-label="次の日">›</button>` +
     `<span class="pill${low ? ' warn' : ' ok'}">${t ? st.n + '人' + (low ? '・人数が足りません' : '') : '未作成'}</span>` +
     (st.rule ? `<span class="meta">必要 ${st.rule.min}${st.rule.max == null ? '人以上' : '〜' + st.rule.max + '人'}</span>` : '') + '</div>' +
-    (low ? `<div class="mshort">${shortDetail(mDay).map(x => esc(x)).join('<br>')}</div>` : '') + '<ul class="mlist">';
+    (low ? `<div class="mshort"><ul>${shortItems(mDay).map(it => shortLi(it)).join('')}</ul></div>` : '') + '<ul class="mlist">';
   shiftStaff(keys, pk).forEach(s => {
     const sh = dayShifts(mDay)[s.id], pref = adminPref(s.id, mDay, pk);
     let chip, cls = '', style = '';

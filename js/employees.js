@@ -7,7 +7,7 @@ const availText = s => (s.avail || []).length ? s.avail.map(x => `${daysText(slo
 const wageText = s => s.wage > 0 ? (s.cur === 'USD' ? '$' + s.wage : s.wage.toLocaleString() + '円') : `最低賃金（${state.settings.minWage.toLocaleString()}円）`;
 const belowMin = s => s.wage > 0 && (s.cur || 'JPY') === 'JPY' && s.wage < state.settings.minWage;
 
-/* 出勤できる曜日と時間の入力欄（従業員の登録と、変更申請の両方で使う）。曜日をえらび、時間を入れ、「＋ 追加」で時間帯をいくつでも増やせる */
+/* 勤務可能曜日・時間の入力欄（従業員の登録と、変更申請の両方で使う）。曜日をえらび、時間を入れ、「＋ 追加」で時間帯をいくつでも増やせる */
 function SlotEditor(rootSel, prefix, addSel) {
   const root = $(rootSel), ed = { draft: [] }, re = new RegExp('^' + prefix + '([SE])(\\d+)$');
   ed.render = () => {
@@ -23,7 +23,7 @@ function SlotEditor(rootSel, prefix, addSel) {
   ed.read = () => ed.draft.forEach((x, i) => { x.start = getT(prefix + 'S' + i); x.end = getT(prefix + 'E' + i); });   // いま入力中の時刻も読み取る
   ed.check = () => {   // 問題があればエラー文、なければ null
     ed.read();
-    if (!ed.draft.length) return '出勤できる曜日と時間を、1つ以上入れてください';
+    if (!ed.draft.length) return '勤務可能曜日・時間を、1つ以上入れてください';
     for (const x of ed.draft) {
       if (x.start === null || x.end === null) return '時刻の形式が正しくありません。9:00 や 0900 のように入力してください';
       if (!x.days.length) return '曜日を1つ以上えらんでください';
@@ -130,7 +130,7 @@ function renderStaffList() {
   if (!state.staff.length) { box.innerHTML = '<div class="empty">まだ従業員がいません。「＋ 従業員を追加」から登録できます（開発者モードで、例のデータも作れます）。</div>'; return; }
   if (!list.length) { box.innerHTML = '<div class="empty">条件に合う従業員がいません。</div>'; return; }
   const sub = s => [s.type, s.birth ? (isMinor(s, today) ? `<b class="warnText">${ageOn(s, today)}歳（18歳未満）</b>` : `${ageOn(s, today)}歳`) : '', s.weeklyMax ? `週${s.weeklyMax}時間まで` : '', s.incomeCap ? `月${s.incomeCap.toLocaleString()}円まで` : '', s.dpw ? `週${s.dpw.min}〜${s.dpw.max}日` : '', s.join ? `入社 ${s.join.slice(5).replace('-', '/')}` : '', s.leave ? `退職 ${s.leave.slice(5).replace('-', '/')}` : ''].filter(Boolean).join('・');
-  box.innerHTML = '<table class="emtable"><thead><tr><th>名前</th><th>役割</th><th>評価</th><th>時給</th><th>出勤できる曜日・時間</th><th></th></tr></thead><tbody>' + list.map(s => `<tr>
+  box.innerHTML = '<table class="emtable"><thead><tr><th>名前</th><th>役割</th><th>評価</th><th>時給</th><th>勤務可能曜日・時間</th><th></th></tr></thead><tbody>' + list.map(s => `<tr>
     <td class="nm"><b>${esc(s.name)}</b><div class="sub">${sub(s)}</div></td>
     <td>${s.role ? `<span class="badge" style="background:${roleColor(s.role)}">${esc(s.role)}</span>` : '<span class="meta">—</span>'}${(s.skills || []).filter(n => state.roles.some(r => r.name === n)).map(n => `<span class="badge sk" style="color:${roleColor(n)};border-color:${roleColor(n)}" title="兼務できる持ち場">${esc(n)}</span>`).join('')}</td>
     <td><span class="stars">${stars(s.rating)}</span></td>
@@ -152,13 +152,13 @@ $('#staffList').addEventListener('click', async e => {
   }
 });
 
-/* ---- 出勤できる曜日・時間の変更申請（従業員が申請 → 管理者が承認すると反映） ---- */
+/* ---- 勤務可能曜日・時間の変更申請（従業員が申請 → 管理者が承認すると反映） ---- */
 const dpwText = s => s.dpw ? `${s.dpw.min}〜${s.dpw.max}日（本人の希望）` : `${state.settings.auto2.dpw.min}〜${state.settings.auto2.dpw.max}日（初期値）`;
 const REQ_LABEL = { pending: '承認待ち', approved: '承認されました', rejected: '承認されませんでした' };
 const pendingReqs = () => state.requests.filter(r => r.status === 'pending');
 function renderReqBanner() {
   const n = pendingReqs().length; $('#reqBanner').hidden = !n;
-  $('#reqBannerText').textContent = n ? `出勤できる曜日・時間の変更申請が${n}件あります。` : '';
+  $('#reqBannerText').textContent = n ? `勤務可能曜日・時間の変更申請が${n}件あります。` : '';
 }
 function renderReqCard() {   // 従業員画面
   const s = state.staff.find(x => x.id === empId), emp = !!(me && me.role === 'employee');

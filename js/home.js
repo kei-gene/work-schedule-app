@@ -140,7 +140,7 @@ function renderWork(keep) {
   const H = hoursList(), wrap = $('#gantt'), k = HW(), pk = pkOf(k), [lo, hi] = homeRange(), D = dim(), shiftOn = hasWork(k);
   const { work, brk, mode } = workDay(k), manual = mode === 'manual';
   $('#legend').innerHTML = state.roles.map(r => `<span><i style="background:${r.color}"></i>${esc(r.name)}</span>`).join('') +
-    '<span><i style="background:#5f6b76"></i>役割なし</span><span><i style="background:#dfe6ec;border:1px solid #bcc8d2"></i>休憩（法定）</span>' + (manual ? '<span><i style="background:#f3faf9;border:1px solid #ccc"></i>出勤できる時間</span>' : '');
+    '<span><i style="background:#5f6b76"></i>役割なし</span><span><i style="background:#dfe6ec;border:1px solid #bcc8d2"></i>休憩（法定）</span>' + (manual ? '<span><i style="background:#f3faf9;border:1px solid #ccc"></i>勤務可能時間</span>' : '');
   $('#hwLabel').textContent = dayLabel(k); $('#hwPrev').disabled = k <= lo; $('#hwNext').disabled = k >= hi;
   const drift = manual && shiftOn && (() => { const dw = deriveDay(k).work, ids = new Set([...Object.keys(dw), ...Object.keys(work).filter(i => (work[i] || []).length)]);
     return [...ids].some(i => JSON.stringify([...(dw[i] || [])].sort((a, b) => a - b)) !== JSON.stringify([...(work[i] || []), ...(brk[i] || [])].sort((a, b) => a - b))); })();   // シフトと違う部分があるか
@@ -202,7 +202,7 @@ $('#gantt').addEventListener('click', async e => {
   const td = e.target.closest('.cell[data-id]'); if (!td) return;
   const k = HW(), id = td.dataset.id, h = +td.dataset.h;
   if (!td.classList.contains('on') && !td.classList.contains('brk') && td.classList.contains('off') &&
-      !await ui.ask('出勤できる時間の外のマスです。\nこの時間に勤務を入れますか？', { ok: '入れる' })) return;
+      !await ui.ask('勤務可能時間の外のマスです。\nこの時間に勤務を入れますか？', { ok: '入れる' })) return;
   if ((state.workMode[k] || 'shift') !== 'manual') { materialize(k); ui.toast('手動の調整に切り替えました。「シフト通りに作る」で、シフトの時間どおりに戻せます', 'warn'); }
   const M = state.work[k] || (state.work[k] = {}), x = normW(M[id]);
   if (x.w.includes(h)) { x.w.splice(x.w.indexOf(h), 1); x.b.push(h); }        // 働く → 休憩

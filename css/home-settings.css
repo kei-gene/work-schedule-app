@@ -64,3 +64,17 @@ body[data-layout="mobile"] .scbtn{flex:none;padding:9px 14px}
 
 .keepchk{margin:0 6px 0 0;white-space:nowrap}
 .keepchk input{width:auto;margin:0}
+/* ---- 人数が足りない日：箇条書き ---- */
+.lackline details{margin:0}
+.lackline summary{cursor:pointer;font-weight:700}
+.lackline summary small{margin-left:8px;font-weight:400;font-size:12px;color:#8a4b44}
+.lacklist{margin:8px 0 4px;padding-left:20px;color:var(--ink);font-weight:400;font-size:13px;line-height:1.7}
+.lacklist>li{margin:6px 0}
+.lacklist>li>b{color:#b3261e}
+.lacklist ul,.mshort ul,.arwhy ul{margin:2px 0 0;padding-left:18px;list-style:disc}
+.lacklist li,.mshort li,.arwhy li{margin:2px 0}
+.lk{display:inline-block;margin-right:6px;padding:0 8px;border-radius:10px;background:#fff;border:1px solid #e9b3a1;color:#b3261e;font-size:12px;font-weight:700;vertical-align:1px}
+li.ref{color:var(--sub);font-size:12px}
+li.ref .lk{color:var(--sub);border-color:var(--line);font-weight:400}
+.lackline .meta{margin:6px 0 0;font-weight:400;font-size:12px;color:var(--sub)}
+.mshort ul{margin:0;padding-left:18px}
