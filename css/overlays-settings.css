@@ -10,9 +10,17 @@
 .busy-card .meta{margin:0 0 14px;color:var(--sub);font-size:12px;line-height:1.7}
 @media (prefers-reduced-motion:reduce){.spin{animation-duration:2.4s}}
 /* ---- ホバーで詳しく見る ---- */
-#tip{position:fixed;z-index:90;max-width:320px;background:#18323a;color:#fff;border-radius:8px;padding:9px 12px;font-size:12px;line-height:1.7;box-shadow:0 6px 20px rgba(0,0,0,.3);pointer-events:none}
+#tip{position:fixed;z-index:90;width:max-content;max-width:min(380px,calc(100vw - 16px));min-width:200px;background:#18323a;color:#fff;border-radius:8px;padding:10px 14px;font-size:13px;line-height:1.7;box-shadow:0 6px 20px rgba(0,0,0,.3);pointer-events:none}
 #tip[hidden]{display:none}
-#tip b{display:block;font-size:13px;margin-bottom:2px}
+#tip b{display:block;font-size:14px;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,.2)}
+#tip .sec{margin-top:8px;font-size:12px;font-weight:700;color:#9fc3c8}
+#tip .sec.lead{color:#9aa8ad}
+#tip table{border-collapse:collapse;margin:3px 0 2px}
+#tip td{padding:2px 14px 2px 0;white-space:nowrap;font-variant-numeric:tabular-nums}
+#tip td:last-child{padding-right:0}
+#tip td.miss{color:#ffb4a8;font-weight:700}
+#tip .sec.lead + table td{color:#c4d0d3}
+#tip .sec.lead + table td.miss{color:#c4d0d3;font-weight:400}
 #tip .lead{color:#b8cfd3}
 [data-tip]{cursor:help}
 .tipchip{display:inline-block;margin:2px 6px 2px 0;padding:1px 9px;border-radius:12px;background:#fff;border:1px solid #e9b3a1;color:#b3261e;font-size:12px;font-weight:700;cursor:help}
@@ -41,7 +49,8 @@ body[data-layout="mobile"] .setcats{flex-wrap:nowrap;overflow-x:auto}
 body[data-layout="mobile"] .helpsel{flex:none;margin-left:12px}
 body[data-layout="mobile"] .cardhead,body[data-layout="mobile"] .cardbody{padding-left:14px;padding-right:14px}
 
-.mshort{margin:8px 0 10px;padding:8px 12px;background:#fde8e1;border-left:4px solid #e5675b;border-radius:4px;color:#b3261e;font-size:12px;line-height:1.7}
+.mshort{margin:8px 0 10px;padding:2px 8px 6px;background:#fff;border:1px solid #e9b3a1;border-left:4px solid #e5675b;border-radius:4px;color:var(--ink);font-size:12px;line-height:1.6}
+.mshort .lacktbl{margin:4px 0 0}
 
 /* 確認の画面は、ほかの画面（シフトの編集など）より、いつも手前に出す */
 #modal.modal{z-index:70}

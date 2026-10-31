@@ -10,11 +10,21 @@ const tipEl = document.createElement('div'); tipEl.id = 'tip'; tipEl.hidden = tr
 let tipFor = null;
 function showTip(el, x, y) {
   const lines = el.dataset.tip.split('\n'); tipFor = el;
-  tipEl.innerHTML = `<b>${esc(lines[0])}</b>` + lines.slice(1).map(l => `<div${l.startsWith('（参考）') ? ' class="lead"' : ''}>${esc(l)}</div>`).join('');
-  tipEl.hidden = false;
-  const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
-  tipEl.style.left = Math.max(8, Math.min(x + 14, window.innerWidth - w - 8)) + 'px';
-  tipEl.style.top = Math.max(8, Math.min(y + 16, window.innerHeight - h - 8)) + 'px';
+  let html = `<b>${esc(lines[0])}</b>`, rows = [];
+  const flush = () => { if (rows.length) { html += '<table>' + rows.map(r => `<tr>${r.map((c, i) => `<td${i === r.length - 1 ? ' class="miss"' : ''}>${esc(c)}</td>`).join('')}</tr>`).join('') + '</table>'; rows = []; } };
+  lines.slice(1).forEach(l => {
+    if (l.startsWith('|')) { rows.push(l.slice(1).split('|')); return; }   // 表の行（時間・必要・現在・不足）
+    flush();
+    if (l.startsWith('§')) html += `<div class="sec${l.startsWith('§（参考）') ? ' lead' : ''}">${esc(l.slice(1))}</div>`;
+    else html += `<div${l.startsWith('（参考）') ? ' class="lead"' : ''}>${esc(l)}</div>`;
+  });
+  flush(); tipEl.innerHTML = html;
+  tipEl.hidden = false; tipEl.style.left = '0px'; tipEl.style.top = '0px';   // 本来の幅と高さを測るため、いったん左上に置く（前の位置が右端だと、細長く縮んでしまう）
+  const w = tipEl.offsetWidth, h = tipEl.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
+  let left = x + 14; if (left + w > vw - 8) left = x - w - 14;              // 右に入りきらないときは、カーソルの左に出す
+  let top = y + 16; if (top + h > vh - 8) top = y - h - 12;                 // 下に入りきらないときは、カーソルの上に出す
+  tipEl.style.left = Math.max(8, Math.min(left, vw - w - 8)) + 'px';
+  tipEl.style.top = Math.max(8, Math.min(top, vh - h - 8)) + 'px';
 }
 const hideTip = () => { tipEl.hidden = true; tipFor = null; };
 document.addEventListener('mouseover', e => { const t = e.target.closest && e.target.closest('[data-tip]'); if (t && layout !== 'mobile') showTip(t, e.clientX, e.clientY); });

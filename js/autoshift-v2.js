@@ -311,15 +311,14 @@ function renderReport() {
   if (!r) { box.innerHTML = '<p class="meta">まだ自動作成していません。</p>'; return; }
   const bad = r.shortages.length, dn = k => { const d = parseYmd(k); return `${d.getMonth() + 1}/${d.getDate()}（${DOW[d.getDay()]}）`; };
   let html = `<div class="sum${bad ? ' bad' : ''}"><b>${esc(r.label)}</b>　計算 ${(r.ms / 1000).toFixed(1)}秒（${r.iters.toLocaleString()}回の入れ替え）<br>` +
-    (bad ? `⚠ 人数が足りない日が${bad}日あります。` : '✓ 人数が足りない日はありません。') + `<br>連勤の上限超え ${r.streakV}件 ／ 勤務の間の時間が足りない ${r.intV}件 ／ 自動の休みの連続（${r.restMax}日超え）${r.restV}件` +
+    (bad ? `⚠ 人数が不足している日が${bad}日あります。` : '✓ 人数が不足している日はありません。') + `<br>連勤の上限超え ${r.streakV}件 ／ 勤務の間の時間が足りない ${r.intV}件 ／ 自動の休みの連続（${r.restMax}日超え）${r.restV}件` +
     (r.multiN ? ` ／ 兼務できる人 ${r.multiN}人（兼務の持ち場に入った勤務 ${r.stSwitch}件）` : '') +
     (r.patterns ? ` ／ 型に合わせた勤務 ${r.patN}件・型に合わない勤務 ${r.flexN}件` : '') +
-    (r.leadMin ? `<br>責任者がいない時間：${r.leadHours}時間（${r.leadDays}日）${r.leadHours ? '　※責任者の人数や出勤日数が足りないときは、役割の見直しか、「責任者を各時間に置く人数」の調整が必要です' : ''}` : '') + '</div>';
+    (r.leadMin ? `<br>責任者が不在の時間：${r.leadHours}時間（${r.leadDays}日）${r.leadHours ? '　※責任者の人数や出勤日数が足りないときは、役割の見直しか、「責任者を各時間に置く人数」の調整が必要です' : ''}` : '') + '</div>';
   if (bad) {
-    html += '<h3>人数が足りない日（理由と、相談できる人）</h3>';
+    html += '<h3>人数が不足している日（内訳と、相談できる人）</h3>';
     r.shortages.slice(0, 12).forEach(sd => {
-      const hrsLi = sd.hrs.length ? `<li><span class="lk">時間帯の人数</span>足りない時間帯が${sd.hrs.length}時間あります<ul>${sd.hrs.slice(0, 6).map(x => `<li>${x.h}時台：${x.have}人（最低${x.need}人）→ あと${x.need - x.have}人</li>`).join('')}${sd.hrs.length > 6 ? `<li>…ほか${sd.hrs.length - 6}時間</li>` : ''}</ul></li>` : '';
-      html += `<div class="arday"><b>${dn(sd.k)}</b><ul class="arwhy">${hrsLi}${sd.dayShort ? `<li><span class="lk">1日の出勤人数</span>あと${sd.dayShort}人</li>` : ''}<li class="meta">この日に勤務可能な従業員（休みの指定の人）：${sd.avail ?? 0}人</li></ul>`;
+      html += `<div class="arday"><b>${dn(sd.k)}</b>${shortTable(sd.k)}<div class="meta">この日に勤務可能な従業員（休みの指定の人）：${sd.avail ?? 0}人</div>`;
       html += sd.cands && sd.cands.length ? '<div class="cands"><span class="meta">まず相談する人（休みの指定になっている人。影響が小さい順）</span>' + sd.cands.map(c => `<div class="cand"><b>${esc(c.name)}</b> ${c.a}:00–${c.b}:00 <span class="meta">影響 ${c.delta >= 0 ? '+' : ''}${Math.round(c.delta)}点</span> <button type="button" class="btn small" data-ar="${c.id}|${sd.k}|${c.a}|${c.b}">この人に入れる</button></div>`).join('') + '</div>' : '<div class="meta">不足の時間帯に出られる人が、ほかにいません（希望休の人をのぞく）。</div>';
       if (sd.last && sd.last.length) html += '<div class="last">最後の手段（希望休の人。原則はお願いしません）：' + sd.last.map(c => `${esc(c.name)} ${c.a}:00–${c.b}:00 <button type="button" class="btn small" data-ar="${c.id}|${sd.k}|${c.a}|${c.b}">確認して入れる</button>`).join('　') + '</div>';
       html += '</div>';
@@ -344,5 +343,5 @@ $('#arRetry').addEventListener('click', async () => {
   $('#arModal').hidden = true; busyStop = false; busyUI.show('別の案で作り直しています', `最大${state.settings.auto2.secs}秒かかります。`); await paintUI();
   let res; try { res = await autoShiftsV2(aP, $('#wKeep').checked, ++a2Seed, f => busyUI.set(f)); } finally { busyUI.hide(); }
   save(); renderShift(); openReport();
-  ui.toast(`別の案で作り直しました（足りない日：${res.shortDays.length}日）`, res.shortDays.length ? 'warn' : '');
+  ui.toast(`別の案で作り直しました（不足の日：${res.shortDays.length}日）`, res.shortDays.length ? 'warn' : '');
 });

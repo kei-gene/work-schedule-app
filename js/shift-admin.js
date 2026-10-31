@@ -98,9 +98,10 @@ function renderLackLine(keys) {
   el.hidden = !lack.length;
   if (!lack.length) { el.innerHTML = ''; return; }
   const dn = k => `${mdText(k)}（${DOW[parseYmd(k).getDay()]}）`;
-  el.innerHTML = `<details${lack.length <= 5 ? ' open' : ''}><summary>⚠ 人数が足りない日が${lack.length}日あります<small>（クリックで開く・閉じる）</small></summary><ul class="lacklist">` +
-    lack.slice(0, 14).map(k => `<li><b>${dn(k)}</b><ul>${shortItems(k).map(it => shortLi(it, false)).join('')}</ul></li>`).join('') + '</ul>' +
-    (lack.length > 14 ? `<p class="meta">…ほか${lack.length - 14}日</p>` : '') + '<p class="meta">くわしい内訳は、表の日付（赤い日）にカーソルを当てる（スマホはタップ）か、「作成結果」で見られます。</p></details>';
+  el.innerHTML = `<details${lack.length <= 5 ? ' open' : ''}><summary>⚠ 人数が不足している日が${lack.length}日あります<small>（クリックで開く・閉じる）</small></summary>` +
+    '<div class="tscroll"><table class="lacktbl"><thead><tr><th>日付</th><th>内容</th><th>必要</th><th>現在</th><th>不足</th></tr></thead><tbody>' +
+    lack.slice(0, 14).map(k => { const rows = shortRows(k); return rows.map((r, i) => `<tr class="${[i === 0 ? 'first' : '', r.ref ? 'ref' : ''].filter(Boolean).join(' ')}">${i === 0 ? `<th class="dt" rowspan="${rows.length}">${dn(k)}</th>` : ''}${shortCells(r)}</tr>`).join(''); }).join('') + '</tbody></table></div>' +
+    (lack.length > 14 ? `<p class="meta">…ほか${lack.length - 14}日</p>` : '') + '<p class="meta">「必要」は最低人数、「現在」はいま配置されている人数、「不足」はあと何人必要かです。くわしい内訳は、表の日付（赤い日）にカーソルを当てる（スマホはタップ）か、「作成結果」で見られます。</p></details>';
 }
 
 function dayCover(k) {   // その日の、時間ごとの配置人数
@@ -114,25 +115,30 @@ function dayCover(k) {   // その日の、時間ごとの配置人数
   });
   return { n, cnt, roleAt, H };
 }
-/* 人数が足りない日の、「どこが・どれだけ」足りないかを、項目ごとに分ける（一覧・カーソルを当てたとき・スマホ・作成結果で使う） */
+/* 人数が不足している日の内訳を、表の行にする（一覧・カーソルを当てたとき・スマホ・作成結果で使う）。必要人数・現在の人数・不足の人数を出す */
 function shortItems(k) {
   const c = dayCover(k), H = c.H, dr = dayRuleOf(k), L = [];
-  const rng = hs => { const out = []; let a = null, b = null; hs.forEach(h => { if (a === null) a = b = h; else if (h === b + 1) b = h; else { out.push([a, b]); a = b = h; } }); if (a !== null) out.push([a, b]); return out.map(([x, y]) => x === y ? `${x}時台` : `${x}〜${y}時台`).join('、'); };
+  const group = (hs, need, have) => {   // 必要人数と現在の人数が同じ時間が続くときは、1行にまとめる
+    const rows = []; hs.forEach(h => { const n = need(h), v = have(h), r = rows[rows.length - 1]; if (r && r.e === h - 1 && r.need === n && r.have === v) r.e = h; else rows.push({ s: h, e: h, need: n, have: v }); });
+    return rows.map(r => ({ range: r.s === r.e ? `${r.s}時台` : `${r.s}〜${r.e}時台`, need: r.need, have: r.have }));
+  };
   const hs = H.filter(h => c.cnt[h] < rule(h).min);
-  if (hs.length) L.push({ kind: 'hour', label: '時間帯の人数', text: `${rng(hs)}（最大あと${Math.max(...hs.map(h => rule(h).min - c.cnt[h]))}人）`, sub: hs.slice(0, 6).map(h => `${h}時台：${c.cnt[h]}人（最低${rule(h).min}人）→ あと${rule(h).min - c.cnt[h]}人`).concat(hs.length > 6 ? [`…ほか${hs.length - 6}時間`] : []) });
-  if (dr && c.n < dr.min) L.push({ kind: 'day', label: '1日の出勤人数', text: `${c.n}人（最低${dr.min}人）→ あと${dr.min - c.n}人` });
-  state.roles.forEach(ro => { const q = state.roleRules[ro.name]; if (!q || !q.min) return; const low = H.filter(h => (c.roleAt[h][ro.name] || 0) < q.min); if (low.length) L.push({ kind: 'role', label: `役割「${ro.name}」`, text: `${rng(low)}が足りません（最低${q.min}人）` }); });
-  const A = state.settings.auto2, leads = state.roles.filter(r => r.lead).map(r => r.name);
-  if (A.leadMin > 0 && leads.length) { const low = H.filter(h => leads.reduce((n, nm) => n + (c.roleAt[h][nm] || 0), 0) < A.leadMin); if (low.length) L.push({ kind: 'lead', label: '責任者', text: `いない時間：${rng(low)}`, ref: true }); }
+  if (hs.length) L.push({ kind: 'hour', label: '時間帯の人数', rows: group(hs, h => rule(h).min, h => c.cnt[h]) });
+  if (dr && c.n < dr.min) L.push({ kind: 'day', label: '1日の出勤人数', rows: [{ range: '1日', need: dr.min, have: c.n }] });
+  state.roles.forEach(ro => { const q = state.roleRules[ro.name]; if (!q || !q.min) return; const low = H.filter(h => (c.roleAt[h][ro.name] || 0) < q.min); if (low.length) L.push({ kind: 'role', label: `役割「${ro.name}」`, rows: group(low, () => q.min, h => c.roleAt[h][ro.name] || 0) }); });
+  const A = state.settings.auto2, leads = state.roles.filter(r => r.lead).map(r => r.name), nLead = h => leads.reduce((n, nm) => n + (c.roleAt[h][nm] || 0), 0);
+  if (A.leadMin > 0 && leads.length) { const low = H.filter(h => nLead(h) < A.leadMin); if (low.length) L.push({ kind: 'lead', label: '責任者（参考）', ref: true, rows: group(low, () => A.leadMin, nLead) }); }
   return L;
 }
-function shortDetail(k) {   // カーソルを当てたときの説明（1行ずつ）
-  const out = []; shortItems(k).forEach(it => { out.push(`${it.ref ? '（参考）' : ''}${it.label}：${it.text}`); (it.sub || []).forEach(x => out.push('・' + x)); });
+const shortRows = k => { const out = []; shortItems(k).forEach(it => it.rows.forEach(r => out.push({ ...r, label: it.label, kind: it.kind, ref: !!it.ref }))); return out; };
+const missTxt = r => (r.kind === 'lead' && !r.have) ? '不在' : `${r.need - r.have}人`;
+function shortDetail(k) {   // カーソルを当てたときの説明（§＝見出し、|＝表の行）
+  const out = []; shortItems(k).forEach(it => { out.push(`§${it.ref ? '（参考）' : ''}${it.label}`); it.rows.slice(0, 8).forEach(r => out.push(`|${r.range}|必要${r.need}人|現在${r.have}人|${it.kind === 'lead' && !r.have ? '不在' : '不足' + (r.need - r.have) + '人'}`)); if (it.rows.length > 8) out.push(`…ほか${it.rows.length - 8}行`); });
   return out;
 }
-/* 項目を箇条書き（<li>）にする */
-const shortLi = (it, sub = true) => `<li${it.ref ? ' class="ref"' : ''}><span class="lk">${esc(it.label)}</span>${esc(it.text)}${sub && it.sub ? `<ul>${it.sub.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</li>`;
-const tipOf = k => { const d = parseYmd(k); return `${d.getMonth() + 1}/${d.getDate()}（${DOW[d.getDay()]}）：人数が足りません\n` + shortDetail(k).join('\n'); };
+const shortCells = r => `<td><span class="lb">${esc(r.label)}</span>${r.kind === 'day' ? '' : esc(r.range)}</td><td>${r.need}人</td><td>${r.have}人</td><td class="miss">${missTxt(r)}</td>`;
+const shortTable = k => { const rows = shortRows(k); return rows.length ? `<table class="lacktbl"><thead><tr><th>内容</th><th>必要</th><th>現在</th><th>不足</th></tr></thead><tbody>${rows.map(r => `<tr${r.ref ? ' class="ref"' : ''}>${shortCells(r)}</tr>`).join('')}</tbody></table>` : '<p class="meta">いまは解消しています。</p>'; };
+const tipOf = k => { const d = parseYmd(k); return `${d.getMonth() + 1}/${d.getDate()}（${DOW[d.getDay()]}）：人数が不足しています\n` + shortDetail(k).join('\n'); };
 
 function dayStat(k) {   // lack = 人数が足りない（1日の人数ルール、または時間帯ごとの最低人数）
   const { n, cnt, roleAt, H } = dayCover(k), dr = dayRuleOf(k), hs = shortageOf(cnt, roleAt, H), dayShort = dr ? Math.max(0, dr.min - n) : 0;
@@ -149,7 +155,7 @@ const conflictOf = (sh, pref, s, k) => {   // 'req' 希望休の日 / 'out' 希�
 
 /* 表の1マス（PC版） */
 function shiftCell(s, k, pk, compact) {
-  const sh = dayShifts(k)[s.id], pref = adminPref(s.id, k, pk), L = state.settings, attr = `data-id="${s.id}" data-d="${k}"`, c = compact ? ' c' : '', tc = k === todayKey() ? ' tcol' : '';
+  const sh = dayShifts(k)[s.id], pref = adminPref(s.id, k, pk), L = state.settings, attr = `data-id="${s.id}" data-d="${k}"`, c = compact ? ' c' : '', tc = k === todayKey() ? ' todaycol' : '';
   if (isWork(sh)) {
     const hrs = shiftHours(sh), over = hrs > L.limitDay, cf = conflictOf(sh, pref, s, k), stn = stationOf(s, sh), swSt = stn !== s.role;
     const title = `${s.name} ${hm(sh.start)}–${hm(sh.end)}（実働${fh(hrs)}時間${sh.brk ? '・休憩' + sh.brk + '分' : ''}${swSt ? '・持ち場：' + stn : ''}）${cf === 'req' ? ' ※希望休の日です' : cf === 'out' ? ' ※希望の時間外です' : ''}`;
@@ -188,7 +194,7 @@ function renderShiftDesktop(keys, pk, el, ro) {
   });
   html += '</tbody><tfoot>';
   if (anyRule) html += '<tr class="need"><th class="name">必要人数<small>人数ルール</small></th>' + stat.map(st => `<td>${st.rule ? st.rule.min + (compact ? (st.rule.max == null ? '+' : '-' + st.rule.max) : '〜' + (st.rule.max == null ? '' : st.rule.max)) : '—'}</td>`).join('') + '</tr>';
-  html += '<tr><th class="name">出勤人数</th>' + dayCount.map((n, i) => `<td class="${lowAt(i) ? 'low' : stat[i].over ? 'high' : ''}${keys[i] === today ? ' tcol' : ''}" ${lowAt(i) ? ` data-tip="${esc(tipOf(keys[i]))}"` : stat[i].over ? ' title="最高人数を超えています"' : ''}>${n}${compact ? '' : '人'}</td>`).join('') + '</tr>';
+  html += '<tr><th class="name">出勤人数</th>' + dayCount.map((n, i) => `<td class="${lowAt(i) ? 'low' : stat[i].over ? 'high' : ''}${keys[i] === today ? ' todaycol' : ''}" ${lowAt(i) ? ` data-tip="${esc(tipOf(keys[i]))}"` : stat[i].over ? ' title="最高人数を超えています"' : ''}>${n}${compact ? '' : '人'}</td>`).join('') + '</tr>';
   if (anyWage) html += '<tr><th class="name">人件費</th>' + dayCost.map(c => `<td>${c ? (compact ? Math.round(c / 1000) + 'k' : money(c)) : '—'}</td>`).join('') + '</tr>';
   el.innerHTML = html + '</tfoot></table>';
 }
@@ -207,9 +213,9 @@ function renderShiftMobile(keys, pk) {
   const d = parseYmd(mDay), st = dayStat(mDay), idx = keys.indexOf(mDay), t = hasShifts(mDay), low = active && st.lack;
   html += `<div class="mday-head"><button type="button" class="btn small" data-mnav="-1"${idx === 0 ? ' disabled' : ''} aria-label="前の日">‹</button><strong class="${low ? 'lack' : ''}">${d.getMonth() + 1}/${d.getDate()}（${DOW[d.getDay()]}）${low ? ' ⚠' : ''}</strong>` +
     `<button type="button" class="btn small" data-mnav="1"${idx === keys.length - 1 ? ' disabled' : ''} aria-label="次の日">›</button>` +
-    `<span class="pill${low ? ' warn' : ' ok'}">${t ? st.n + '人' + (low ? '・人数が足りません' : '') : '未作成'}</span>` +
+    `<span class="pill${low ? ' warn' : ' ok'}">${t ? st.n + '人' + (low ? '・人数が不足' : '') : '未作成'}</span>` +
     (st.rule ? `<span class="meta">必要 ${st.rule.min}${st.rule.max == null ? '人以上' : '〜' + st.rule.max + '人'}</span>` : '') + '</div>' +
-    (low ? `<div class="mshort"><ul>${shortItems(mDay).map(it => shortLi(it)).join('')}</ul></div>` : '') + '<ul class="mlist">';
+    (low ? `<div class="mshort">${shortTable(mDay)}</div>` : '') + '<ul class="mlist">';
   shiftStaff(keys, pk).forEach(s => {
     const sh = dayShifts(mDay)[s.id], pref = adminPref(s.id, mDay, pk);
     let chip, cls = '', style = '';

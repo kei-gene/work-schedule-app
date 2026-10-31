@@ -162,7 +162,7 @@ function renderHomeShift() {
   if (!rec) { wrap.innerHTML = '<div class="empty">この期間のシフトは、まだ作成されていません。「シフト管理で開く」から作成できます。</div>'; return; }
   renderShiftDesktop(keys, pk, wrap, true);   // シフト管理と同じ表（見るだけ）
   let tot = 0; state.staff.forEach(s => keys.forEach(k => { tot += shiftHours(dayShifts(k)[s.id]); }));
-  note.innerHTML = `<span class="pill">合計 ${fh(tot)}時間</span>` + (lack.length ? `<span class="lackmsg">⚠ 人数が足りない日が${lack.length}日あります：${lack.slice(0, 8).map(mdText).join('、')}${lack.length > 8 ? `…ほか${lack.length - 8}日` : ''}</span>` : '<span>人数が足りない日はありません</span>');
+  note.innerHTML = `<span class="pill">合計 ${fh(tot)}時間</span>` + (lack.length ? `<span class="lackmsg">⚠ 人数が不足している日が${lack.length}日あります：${lack.slice(0, 8).map(mdText).join('、')}${lack.length > 8 ? `…ほか${lack.length - 8}日` : ''}</span>` : '<span>人数が不足している日はありません</span>');
 }
 
 function renderWork(keep) {
@@ -205,7 +205,7 @@ function renderWork(keep) {
     html += '</tr>';
   });
   html += '</tbody><tfoot><tr><th class="name">配置人数<small>最低〜最高（休憩中は除く）</small></th>';
-  H.forEach(h => { const c = rows.filter(s => (work[s.id] || []).includes(h)).length, r = rule(h); html += `<td class="${c < r.min ? 'low' : c > r.max ? 'high' : ''}"${c < r.min ? ` data-tip="${esc(`${h}時台：${c}人（最低${r.min}人）\nあと${r.min - c}人（休憩中の人は含みません）`)}"` : ''}>${c}<small>${r.min}〜${r.max}</small></td>`; });
+  H.forEach(h => { const c = rows.filter(s => (work[s.id] || []).includes(h)).length, r = rule(h); html += `<td class="${c < r.min ? 'low' : c > r.max ? 'high' : ''}"${c < r.min ? ` data-tip="${esc(`${h}時台：人数が不足しています\n|${h}時台|必要${r.min}人|現在${c}人|不足${r.min - c}人\n休憩中の人は含みません`)}"` : ''}>${c}<small>${r.min}〜${r.max}</small></td>`; });
   html += '</tr>';
   state.roles.forEach(ro => {
     const q = state.roleRules[ro.name];
@@ -292,8 +292,8 @@ $('#btnAutoHome').addEventListener('click', async () => {
   if ((state.workMode[k] || 'shift') === 'manual' && !await ui.ask(`${mdText(k)} の手動の調整を消して、人数ルールで自動作成します。`, { ok: '自動作成する' })) return;
   state.workMode[k] = 'rules'; delete state.work[k]; save(); renderGantt();
   const { work, stn } = workDay(k), low = hoursList().filter(h => Object.values(work).filter(a => a.includes(h)).length < rule(h).min);
-  const mv = Object.values(stn).reduce((n, m) => n + Object.keys(m).length, 0), mvTxt = mv ? `　兼務できる人が、人数が足りない役割へ入れ替わった時間が${mv}か所あります。` : '';
-  if (low.length) ui.toast(`シフトの時間どおりに作りました。${low.map(fmt).join('、')} は最低人数に届いていません（シフトの人数が足りません）` + mvTxt, 'warn');
+  const mv = Object.values(stn).reduce((n, m) => n + Object.keys(m).length, 0), mvTxt = mv ? `　兼務できる人が、人数が不足している役割へ入れ替わった時間が${mv}か所あります。` : '';
+  if (low.length) ui.toast(`シフトの時間どおりに作りました。${low.map(fmt).join('、')} は最低人数に届いていません（シフトの人数が不足しています）` + mvTxt, 'warn');
   else ui.toast('シフトの時間どおりに作り、休憩を最低人数が保てる位置に置きました' + mvTxt);
 });
 $('#btnClear').addEventListener('click', async () => {
