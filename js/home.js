@@ -175,9 +175,9 @@ function renderWork(keep) {
     return [...ids].some(i => JSON.stringify([...(dw[i] || [])].sort((a, b) => a - b)) !== JSON.stringify([...(work[i] || []), ...(brk[i] || [])].sort((a, b) => a - b))); })();   // シフトと違う部分があるか
   $('#hwMode').textContent = manual ? (drift ? '手動で調整中（シフトと違う部分あり）' : '手動で調整中') : mode === 'rules' ? '人数ルールで自動作成（シフトと連動）' : 'シフトと連動中';
   $('#hwMode').className = 'pill' + (manual ? ' warn' : ' ok');
-  $('#hwNote').textContent = manual
-    ? 'マスをクリックすると「働く → 休憩 → なし」の順に切り替わります。右クリック（スマホは長押し）で、役割・休憩・空白を選べます。「シフト通りに作る」で、シフトの時間どおりに戻せます。'
-    : 'この日のシフトに合わせて自動で作られています（シフトを変えると、この表も変わります）。マスをクリックすると、手動の調整に切り替わります。6時間を超える勤務には、法律で決まっている休憩を「休憩」として入れています。兼務できる人は、人数が足りない役割へ、途中の時間から別の持ち場に入ります（右クリック、スマホは長押しで、役割・休憩・空白を選べます）。';
+  $('#hwNote').innerHTML = manual
+    ? '手動で調整中です。<br>クリックで「働く → 休憩 → なし」、右クリック（スマホは長押し）で役割・休憩・空白を選べます。「シフト通りに作る」で元に戻せます。'
+    : 'シフトに連動して自動で作られます（法定の休憩つき・兼務の人は、不足する役割へ途中から入ります）。<br>クリックで手動調整、右クリック（スマホは長押し）で役割・休憩・空白を選べます。';
   $('#btnFromShift').disabled = !shiftOn; $('#btnAutoHome').disabled = !shiftOn;
   if (!state.staff.length || (!shiftOn && !manual)) {
     wrap.innerHTML = `<div class="empty">${state.staff.length ? 'この日のシフトがまだありません。シフトを作ると、この表が自動で作られます。手動で作るときは「空にする」を押してください。' : '従業員がまだいません。「従業員」タブから登録してください。'}</div>`;
@@ -196,11 +196,15 @@ function renderWork(keep) {
     const seq = []; [...w].sort((a, c) => a - c).forEach(h => { const x = stationAt(s, k, h, stn); if (seq[seq.length - 1] !== x) seq.push(x); });   // 今日入る持ち場（順番どおり）
     html += `<tr><th class="name"><b>${esc(s.name)}</b><div class="meta">${esc(s.role || '役割なし')}${seq.length && (seq.length > 1 || seq[0] !== s.role) ? '（今日：' + seq.map(esc).join('→') + '）' : ''} ／ <span class="stars">${stars(s.rating)}</span></div>
       <div class="meta${off || needBrk ? ' warnText' : ''}">${isW ? hm(sh.start) + '–' + hm(sh.end) + '・' : ''}${fh(hrs)}時間${isW && sh.brk ? '・休憩' + sh.brk + '分' : ''}・${money(cost)}${off ? '・希望休' : ''}${needBrk ? '・⚠休憩が足りません' : ''}</div></th>`;
-    H.forEach(h => {
-      const on = w.includes(h), br = b.includes(h);
-      const cls = on || br ? (br ? 'brk' : 'on') : win.includes(h) ? 'ok' : sub.includes(h) ? 'sub' : 'off';
-      const stH = on ? stationAt(s, k, h, stn) : '';
-      html += `<td class="cell ${cls}" data-id="${s.id}" data-h="${h}"${on ? ` style="background:${roleColor(stH)}" title="${esc(stH || '役割なし')}"` : ''}>${on ? (multi ? esc(stH.slice(0, 4)) : '●') : br ? '休憩' : ''}</td>`;
+    // 働く時間は、同じ持ち場が続くあいだ1本の帯にして、役割名は先頭に1回だけ入れる（毎時間に入れると、うるさくなるため）
+    const info = H.map(h => { const br = b.includes(h), on = w.includes(h) && !br; return { h, br, on, st: on ? stationAt(s, k, h, stn) : '' }; });
+    let lastSt = ''; info.forEach((c, i) => { const p = info[i - 1], n = info[i + 1]; c.cont = c.on && !!p && p.on && p.st === c.st; c.next = c.on && !!n && n.on && n.st === c.st; c.lab = c.on && !c.cont && c.st !== lastSt; if (c.on) lastSt = c.st; });   // 休憩のあとも同じ持ち場なら、名前は繰り返さない
+    info.forEach((c, i) => {
+      const cls = c.br ? 'brk' : c.on ? 'on' : win.includes(c.h) ? 'ok' : sub.includes(c.h) ? 'sub' : 'off', col = roleColor(c.st);
+      let inner = c.br ? '休憩' : '';
+      if (c.lab && c.st) { let len = 1; while (info[i + len] && info[i + len].on && info[i + len].st === c.st) len++; inner = `<span class="rl" style="width:calc(${len} * 100%)"><i>${esc(c.st)}</i></span>`; }
+      const sty = c.on ? ` style="background:${col}${c.cont ? ';border-left-color:' + col : ''}${c.next ? ';border-right-color:' + col : ''}" title="${esc(c.st || '役割なし')}"` : '';
+      html += `<td class="cell ${cls}${manual ? '' : ' view'}${c.on ? (c.cont ? ' rc' : '') + (c.next ? ' rn' : '') : ''}" data-id="${s.id}" data-h="${c.h}"${sty}>${inner}</td>`;
     });
     html += '</tr>';
   });

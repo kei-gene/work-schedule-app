@@ -79,3 +79,9 @@
 .bulk-tools input[type=file]{width:auto;margin:0;padding:4px;font-size:12px}
 .bulk-tools label{margin:0}
 .msg{white-space:pre-line}
+/* ---- ボタンの文字を折り返さない（入りきらないときは、ボタンごと次の行へ） ---- */
+.btn{white-space:nowrap}
+.actions{flex-wrap:wrap}
+.toolbar{flex-wrap:wrap;gap:10px 16px}
+.toolbar>div:first-child{flex:1 1 280px;min-width:0}
+.toolbar .actions{margin-left:auto;justify-content:flex-end}

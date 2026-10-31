@@ -114,3 +114,9 @@ li.ref .lk{color:var(--sub);border-color:var(--line);font-weight:400}
 .lacktbl .lb{color:var(--sub);margin-right:6px}
 .lacktbl tr.ref td,.lacktbl tr.ref td.miss{color:var(--sub);font-weight:400}
 .lackline .tscroll{overflow-x:auto}
+
+/* ---- 作業表：役割名（同じ役割が続く時間は帯にして、先頭に1回だけ表示） ---- */
+#gantt td.cell{position:relative}
+#gantt td.cell.on .rl{position:absolute;left:0;top:0;bottom:0;z-index:1;display:flex;align-items:center;justify-content:center;padding:0 4px;pointer-events:none;color:#fff;font-size:11px;font-weight:700;letter-spacing:.02em}
+#gantt td.cell.on .rl i{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-style:normal}
+.gantt tbody th.name{z-index:2}

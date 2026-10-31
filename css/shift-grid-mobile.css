@@ -78,3 +78,5 @@ body[data-layout="mobile"] .toast{max-width:none}
 body[data-layout="mobile"] .legend-shift{gap:8px 12px}
 body[data-layout="mobile"] .dialog{width:min(420px,94vw)}
 body[data-layout="mobile"] .mode{width:100%;justify-content:flex-end}
+body[data-layout="mobile"] .toolbar>div:first-child{flex:none}
+body[data-layout="mobile"] .toolbar .actions{margin-left:0;justify-content:flex-start}
